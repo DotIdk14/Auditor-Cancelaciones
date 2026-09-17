@@ -1,5 +1,7 @@
 import { runAllDecisionTests } from './decision-engine.test';
 import { runGoldenCasesRegression } from './golden-cases';
+import '../../tickets/__tests__/phase1.test';
+import '../../tickets/__tests__/phase2-4.test';
 
 console.log('================================================================');
 console.log('AUDITOR DE CANCELACIONES — SUITE COMPLETA DE VERIFICACIÓN Y REGRESIÓN');

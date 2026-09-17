@@ -1,446 +1,238 @@
-import React, { useState, useEffect } from 'react';
-import { Sidebar, GlobalNavView } from './components/layout/Sidebar';
-import { TopNavbar } from './components/layout/TopNavbar';
-import { CaseHeader, CaseTabType } from './components/audit/CaseHeader';
+import { ReactNode, useMemo, useState } from 'react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock3,
+  Download,
+  FileSearch,
+  FolderOpen,
+  GanttChartSquare,
+  Lock,
+  Plus,
+  ShieldCheck
+} from 'lucide-react';
+import { MVP_TICKETS } from './mock/tickets';
+import { getChronologicalEvidence, Ticket } from './lib/tickets';
 
-// New IA v2 Case Views
-import { CaseSummaryView } from './components/audit/case-views/CaseSummaryView';
-import { CaseEvidencesView } from './components/audit/case-views/CaseEvidencesView';
-import { CaseDecisionView } from './components/audit/case-views/CaseDecisionView';
-import { CaseDictamenView } from './components/audit/case-views/CaseDictamenView';
-
-// Global Navigation Views
-import { CaseSearchList } from './components/audit/CaseSearchList';
-import { AuditQueueView } from './components/global/AuditQueueView';
-import { ReportsView } from './components/global/ReportsView';
-import { PoliciesView } from './components/global/PoliciesView';
-import { SettingsView } from './components/global/SettingsView';
-
-// Modals
-import { EvidenceViewer } from './components/audit/EvidenceViewer';
-import { DecisionTreeModal } from './components/audit/DecisionTreeModal';
-import { AddCaseModal } from './components/audit/AddCaseModal';
-import { AttachEvidenceModal } from './components/audit/AttachEvidenceModal';
-
-// Data & Engine
-import { MOCK_CASES } from './mock/cases';
-import { OFFICIAL_POLICY_PDF } from './mock/evidences';
-import { analyzeCancellationCase } from './lib/decision-engine/decision-engine';
-import { AuditCase, EvidenceItem, DictamenData, CallRecord } from './types/audit';
-import { DecisionResult } from './lib/decision-engine/types';
+const statusLabels: Record<Ticket['status'], string> = {
+  BORRADOR: 'Borrador',
+  EVIDENCIAS_PENDIENTES: 'Evidencias pendientes',
+  PROCESANDO: 'Procesando',
+  REQUIERE_REVISION: 'Revisión requerida',
+  DICTAMEN_PROPUESTO: 'Dictamen propuesto',
+  PDF_EMITIDO: 'PDF emitido',
+  CERRADO: 'Cerrado'
+};
 
 export default function App() {
-  const [casesList, setCasesList] = useState<AuditCase[]>(MOCK_CASES || []);
-  const [selectedCase, setSelectedCase] = useState<AuditCase>(MOCK_CASES?.[0]);
-  
-  // Global Navigation: 'cases' | 'queue' | 'reports' | 'policies' | 'settings' | 'case_detail'
-  const [activeGlobalView, setActiveGlobalView] = useState<GlobalNavView>('case_detail');
+  const [tickets] = useState<Ticket[]>(MVP_TICKETS);
+  const [selectedTicketId, setSelectedTicketId] = useState(tickets[0]?.id ?? '');
+  const selectedTicket = tickets.find(ticket => ticket.id === selectedTicketId) ?? tickets[0];
 
-  // Case Internal Navigation: 'summary' | 'evidences' | 'decision' | 'dictamen'
-  const [activeCaseTab, setActiveCaseTab] = useState<CaseTabType>('summary');
+  const stats = useMemo(() => ({
+    total: tickets.length,
+    automaticos: tickets.filter(ticket => ticket.resultado.automatico).length,
+    revision: tickets.filter(ticket => ticket.status === 'REQUIERE_REVISION').length
+  }), [tickets]);
 
-  // Multiple calls management for active case
-  const allCalls: CallRecord[] = [
-    selectedCase?.primaryCall || (selectedCase as any)?.callRecord,
-    ...(selectedCase?.secondaryCalls || [])
-  ].filter(Boolean);
-
-  const [activeCallId, setActiveCallId] = useState<string>(() => 
-    selectedCase?.primaryCall?.id || (selectedCase as any)?.callRecord?.id || ''
-  );
-
-  // Audio Playback Simulation State
-  const [currentPlayTime, setCurrentPlayTime] = useState<number>(0);
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
-
-  useEffect(() => {
-    if (!selectedCase) return;
-    const primaryId = selectedCase.primaryCall?.id || (selectedCase as any).callRecord?.id || '';
-    setActiveCallId(primaryId);
-    setCurrentPlayTime(0);
-    setIsPlaying(false);
-  }, [selectedCase?.id]);
-
-  const activeCall: CallRecord | undefined = 
-    allCalls.find(c => c.id === activeCallId) || allCalls[0];
-
-  // Decision Engine State
-  const [decisionResult, setDecisionResult] = useState<DecisionResult | null>(() => 
-    selectedCase?.decisionData ? analyzeCancellationCase(selectedCase.decisionData) : null
-  );
-  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
-
-  // Modals
-  const [viewingEvidence, setViewingEvidence] = useState<EvidenceItem | null>(null);
-  const [isDecisionTreeOpen, setIsDecisionTreeOpen] = useState<boolean>(false);
-  const [isAddCaseOpen, setIsAddCaseOpen] = useState<boolean>(false);
-  const [isAttachEvidenceOpen, setIsAttachEvidenceOpen] = useState<boolean>(false);
-
-  // Toast Notification State
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
-
-  const handleAddEvidence = (newEvidence: EvidenceItem) => {
-    if (!selectedCase) return;
-    const updatedEvidences = [newEvidence, ...(selectedCase.evidences || [])];
-    const updatedCase: AuditCase = {
-      ...selectedCase,
-      evidences: updatedEvidences
-    };
-    setSelectedCase(updatedCase);
-    setCasesList(prev => prev.map(c => c.id === updatedCase.id ? updatedCase : c));
-    setViewingEvidence(newEvidence);
-    showToast(`Evidencia "${newEvidence.name}" incorporada al expediente.`);
-  };
-
-  // Audio timer simulation
-  useEffect(() => {
-    let interval: any = null;
-    if (isPlaying) {
-      interval = setInterval(() => {
-        setCurrentPlayTime(prev => {
-          const maxDuration = activeCall?.durationSeconds || 525;
-          if (prev >= maxDuration) {
-            setIsPlaying(false);
-            return 0;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-    } else {
-      clearInterval(interval);
-    }
-    return () => clearInterval(interval);
-  }, [isPlaying, activeCall]);
-
-  // Recalculate decision when case or its decisionData changes
-  useEffect(() => {
-    if (!selectedCase || !selectedCase.decisionData) return;
-    const res = analyzeCancellationCase(selectedCase.decisionData);
-    setDecisionResult(res);
-  }, [selectedCase?.id, selectedCase?.decisionData]);
-
-  // Handler: Select a case from anywhere (Search, Queue, Dropdown)
-  const handleSelectCase = (caseItem: AuditCase) => {
-    setSelectedCase(caseItem);
-    setActiveGlobalView('case_detail');
-    setActiveCaseTab('summary');
-    setCurrentPlayTime(0);
-    setIsPlaying(false);
-  };
-
-  // Handler: Add a brand new case to the auditor
-  const handleAddCase = (newCase: AuditCase) => {
-    setCasesList(prev => [newCase, ...prev]);
-    setSelectedCase(newCase);
-    setActiveGlobalView('case_detail');
-    setActiveCaseTab('summary');
-    setCurrentPlayTime(0);
-    setIsPlaying(false);
-    const res = analyzeCancellationCase(newCase.decisionData);
-    setDecisionResult(res);
-    showToast(`Expediente ${newCase.id} registrado exitosamente.`);
-  };
-
-  // Handler: Add call (via Drag-and-Drop or file picker) to current case
-  const handleAddCall = (newCall: CallRecord) => {
-    if (!selectedCase) return;
-    const updatedSecondary = [...(selectedCase.secondaryCalls || []), newCall];
-    const updatedLlamadas = (selectedCase.decisionData.llamadas || 1) + 1;
-    const updatedContactoEfectivo = selectedCase.decisionData.contactoEfectivo || (newCall.effectiveContact?.efectivo ?? false);
-
-    // Also add an audio evidence item to the evidence list
-    const newCallEvidence: EvidenceItem = {
-      id: `ev-${newCall.id}`,
-      code: `I6-${newCall.id}`,
-      name: `Grabación - ${newCall.title}`,
-      source: 'I6',
-      type: 'audio',
-      status: 'DISPONIBLE',
-      statusLabel: 'Cargado',
-      date: `${newCall.date} ${newCall.time}`,
-      description: `Grabación incorporada al expediente mediante diarización. Duración: ${newCall.duration}.`,
-      previewType: 'i6_log',
-      previewData: {
-        callId: newCall.id,
-        duracion: newCall.duration,
-        sentimiento: newCall.sentiment,
-        criteriosContacto: newCall.effectiveContact?.criterios
-      }
-    };
-
-    const updatedCase: AuditCase = {
-      ...selectedCase,
-      secondaryCalls: updatedSecondary,
-      evidences: [...(selectedCase.evidences || []), newCallEvidence],
-      decisionData: {
-        ...selectedCase.decisionData,
-        llamadas: updatedLlamadas,
-        contactoEfectivo: updatedContactoEfectivo
-      }
-    };
-
-    setSelectedCase(updatedCase);
-    setCasesList(prev => prev.map(c => c.id === updatedCase.id ? updatedCase : c));
-    setActiveCallId(newCall.id);
-    setCurrentPlayTime(0);
-    setIsPlaying(false);
-
-    showToast(`Audio ${newCall.id} incorporado al expediente.`);
-  };
-
-  // Handler: Run analysis on demand
-  const handleRunAnalysis = () => {
-    if (!selectedCase) return;
-    setIsAnalyzing(true);
-    setTimeout(() => {
-      const res = analyzeCancellationCase(selectedCase.decisionData);
-      setDecisionResult(res);
-      setIsAnalyzing(false);
-      showToast('Motor normativo re-evaluado con éxito.');
-    }, 350);
-  };
-
-  // Handler: Modify decision data in sandbox
-  const handleModifyDecisionData = (key: string, value: any) => {
-    if (!selectedCase) return;
-    const updatedCase: AuditCase = {
-      ...selectedCase,
-      decisionData: {
-        ...selectedCase.decisionData,
-        [key]: value
-      }
-    };
-    setSelectedCase(updatedCase);
-    const res = analyzeCancellationCase(updatedCase.decisionData);
-    setDecisionResult(res);
-  };
-
-  // Handler: Update dictamen text
-  const handleUpdateDictamen = (updated: DictamenData) => {
-    if (!selectedCase) return;
-    const updatedCase: AuditCase = {
-      ...selectedCase,
-      dictamen: updated
-    };
-    setSelectedCase(updatedCase);
-    setCasesList(prev => prev.map(c => c.id === updatedCase.id ? updatedCase : c));
-    showToast('Dictamen actualizado.');
-  };
-
-  // Handler: Approve dictamen (Simulated approval)
-  const handleApproveDictamen = () => {
-    if (!selectedCase) return;
-    const now = new Date().toLocaleString('es-MX', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-
-    const approvedDictamen: DictamenData = {
-      ...selectedCase.dictamen,
-      status: 'APROBADO',
-      approvedBy: 'Ian Jarquín (Auditor de Calidad)',
-      approvedAt: now
-    };
-
-    const updatedCase: AuditCase = {
-      ...selectedCase,
-      status: 'APROBADO',
-      statusLabel: 'Dictaminado / Aprobado',
-      dictamen: approvedDictamen
-    };
-
-    setSelectedCase(updatedCase);
-    setCasesList(prev => prev.map(c => c.id === updatedCase.id ? updatedCase : c));
-    showToast('¡Dictamen aprobado y certificado con éxito!');
-  };
-
-  if (!selectedCase) {
-    return <div className="flex h-screen bg-zinc-950 items-center justify-center text-zinc-400">Cargando aplicación...</div>;
+  if (!selectedTicket) {
+    return <main className="min-h-screen bg-zinc-950 text-zinc-100 p-8">Sin tickets disponibles.</main>;
   }
 
+  const chronologicalEvidence = getChronologicalEvidence(selectedTicket);
+  const appliedRules = selectedTicket.reglas.filter(rule => rule.status === 'APLICADA');
+  const blockedRules = selectedTicket.reglas.filter(rule => rule.status !== 'APLICADA');
+
   return (
-    <div className="flex h-screen bg-zinc-950 font-sans text-zinc-100 overflow-hidden">
-      {/* 1. Global Sidebar Navigation */}
-      <Sidebar
-        activeView={activeGlobalView}
-        onSelectView={(view) => {
-          setActiveGlobalView(view);
-        }}
-        currentCase={selectedCase}
-      />
+    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-zinc-950">
+        Saltar al contenido principal
+      </a>
 
-      {/* 2. Main Workspace Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top Header Navbar */}
-        <TopNavbar
-          currentCase={selectedCase}
-          allCases={casesList}
-          onSelectCase={handleSelectCase}
-          onOpenPolicyDoc={() => setViewingEvidence(OFFICIAL_POLICY_PDF)}
-          onOpenAddCaseModal={() => setIsAddCaseOpen(true)}
-          activeGlobalView={activeGlobalView}
-          activeCaseTab={activeCaseTab}
-          onNavigateGlobal={(view) => setActiveGlobalView(view)}
-        />
-
-        {/* Dynamic Main View */}
-        <div className="flex-1 overflow-y-auto">
-          {/* A. Global: Lista General de Casos */}
-          {activeGlobalView === 'cases' && (
-            <div className="p-6 max-w-7xl mx-auto">
-              <CaseSearchList
-                cases={casesList}
-                selectedCaseId={selectedCase.id}
-                onSelectCase={handleSelectCase}
-                onOpenAddCaseModal={() => setIsAddCaseOpen(true)}
-              />
-            </div>
-          )}
-
-          {/* B. Global: Cola de Auditoría */}
-          {activeGlobalView === 'queue' && (
-            <AuditQueueView
-              cases={casesList}
-              onSelectCase={handleSelectCase}
-            />
-          )}
-
-          {/* C. Global: Reportes */}
-          {activeGlobalView === 'reports' && (
-            <ReportsView cases={casesList} />
-          )}
-
-          {/* D. Global: Políticas */}
-          {activeGlobalView === 'policies' && (
-            <PoliciesView />
-          )}
-
-          {/* E. Global: Configuración */}
-          {activeGlobalView === 'settings' && (
-            <SettingsView />
-          )}
-
-          {/* F. Case Detail: 4 Focused Views */}
-          {activeGlobalView === 'case_detail' && (
-            <div className="flex flex-col min-h-full">
-              {/* Case Header with 4 tabs: Resumen, Evidencias, Decisión, Dictamen */}
-              <CaseHeader
-                caseData={selectedCase}
-                activeTab={activeCaseTab}
-                onSelectTab={setActiveCaseTab}
-                onBackToCases={() => setActiveGlobalView('cases')}
-              />
-
-              {/* View Content based on activeTab */}
-              <main className="p-4 md:p-6 max-w-[1700px] w-full mx-auto flex-1">
-                {activeCaseTab === 'summary' && (
-                  <CaseSummaryView
-                    currentCase={selectedCase}
-                    caseData={selectedCase}
-                    decisionResult={decisionResult}
-                    onNavigateToTab={(tab) => setActiveCaseTab(tab)}
-                    onNavigateToEvidences={() => setActiveCaseTab('evidences')}
-                    onNavigateToDecision={() => setActiveCaseTab('decision')}
-                  />
-                )}
-
-                {activeCaseTab === 'evidences' && (
-                  <CaseEvidencesView
-                    currentCase={selectedCase}
-                    caseData={selectedCase}
-                    activeCall={activeCall}
-                    allCalls={allCalls}
-                    activeCallId={activeCallId}
-                    currentPlayTime={currentPlayTime}
-                    isPlaying={isPlaying}
-                    onSelectCall={(callId) => {
-                      setActiveCallId(callId);
-                      setCurrentPlayTime(0);
-                      setIsPlaying(false);
-                    }}
-                    onAddCall={handleAddCall}
-                    onTogglePlay={() => setIsPlaying(!isPlaying)}
-                    onSeek={(sec) => setCurrentPlayTime(sec)}
-                    onSelectEvidence={(ev) => setViewingEvidence(ev)}
-                    onAddNewEvidence={() => setIsAttachEvidenceOpen(true)}
-                    onNavigateToDecision={() => setActiveCaseTab('decision')}
-                  />
-                )}
-
-                {activeCaseTab === 'decision' && (
-                  <CaseDecisionView
-                    decisionResult={decisionResult}
-                    caseData={selectedCase}
-                    isAnalyzing={isAnalyzing}
-                    onRunAnalysis={handleRunAnalysis}
-                    onOpenDecisionTree={() => setIsDecisionTreeOpen(true)}
-                    onModifyDecisionData={handleModifyDecisionData}
-                    onNavigateToDictamen={() => setActiveCaseTab('dictamen')}
-                  />
-                )}
-
-                {activeCaseTab === 'dictamen' && (
-                  <CaseDictamenView
-                    dictamen={selectedCase.dictamen}
-                    caseData={selectedCase}
-                    decisionResult={decisionResult ?? undefined}
-                    onUpdateDictamen={handleUpdateDictamen}
-                    onApproveDictamen={handleApproveDictamen}
-                    onNavigateToDecision={() => setActiveCaseTab('decision')}
-                  />
-                )}
-              </main>
-            </div>
-          )}
+      <header className="border-b border-zinc-800 bg-zinc-950/95 px-4 py-4 md:px-6">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-400">MVP Auditor</p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-white">Tickets de auditoría de cancelaciones</h1>
+            <p className="mt-1 text-sm text-zinc-400">Evidencia cronológica primero, reglas trazables después y resultado al cierre.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-300" aria-label="Resumen de tickets">
+            <Badge label={`${stats.total} tickets`} />
+            <Badge label={`${stats.automaticos} automáticos`} intent="success" />
+            <Badge label={`${stats.revision} en revisión`} intent="warning" />
+          </div>
         </div>
+      </header>
+
+      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-4 px-4 py-4 md:grid-cols-[320px_minmax(0,1fr)] md:px-6">
+        <aside className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4" aria-label="Bandeja de tickets">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-white">Bandeja</h2>
+              <p className="text-xs text-zinc-500">MVP local con datos de ejemplo.</p>
+            </div>
+            <button className="inline-flex items-center gap-1 rounded-xl bg-zinc-100 px-3 py-2 text-xs font-bold text-zinc-950 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400" type="button">
+              <Plus className="h-3.5 w-3.5" /> Nuevo
+            </button>
+          </div>
+
+          <nav className="mt-4 space-y-2" aria-label="Tickets disponibles">
+            {tickets.map(ticket => (
+              <button
+                key={ticket.id}
+                type="button"
+                onClick={() => setSelectedTicketId(ticket.id)}
+                className={`w-full rounded-2xl border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-emerald-400 ${ticket.id === selectedTicket.id ? 'border-emerald-500 bg-emerald-950/30' : 'border-zinc-800 bg-zinc-950/60 hover:border-zinc-700'}`}
+                aria-current={ticket.id === selectedTicket.id ? 'true' : undefined}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-sm font-bold text-zinc-100">{ticket.folio}</span>
+                  <StatusPill status={ticket.status} />
+                </div>
+                <p className="mt-2 truncate text-xs text-zinc-400">{ticket.estudiante.nombre ?? 'Sin estudiante asignado'}</p>
+                <p className="mt-1 truncate text-[11px] text-zinc-500">{ticket.solicitud.motivo ?? 'Sin motivo'}</p>
+              </button>
+            ))}
+          </nav>
+        </aside>
+
+        <main id="main-content" className="space-y-4" tabIndex={-1}>
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 md:p-5" aria-labelledby="ticket-title">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="font-mono text-xs font-semibold text-emerald-400">{selectedTicket.folio}</p>
+                <h2 id="ticket-title" className="mt-1 text-xl font-bold text-white">{selectedTicket.estudiante.nombre ?? 'Ticket sin nombre'}</h2>
+                <dl className="mt-3 grid grid-cols-1 gap-2 text-xs text-zinc-300 sm:grid-cols-2 lg:grid-cols-4">
+                  <Info label="Matrícula" value={selectedTicket.estudiante.matricula} />
+                  <Info label="Programa" value={selectedTicket.estudiante.programa} />
+                  <Info label="Política" value={selectedTicket.solicitud.politicaSolicitada} />
+                  <Info label="Estado" value={statusLabels[selectedTicket.status]} />
+                </dl>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                  <FileSearch className="h-4 w-4" /> Corregir excepción
+                </button>
+                <button type="button" disabled className="inline-flex cursor-not-allowed items-center gap-2 rounded-xl bg-zinc-800 px-3 py-2 text-xs font-semibold text-zinc-500" aria-disabled="true">
+                  <Download className="h-4 w-4" /> PDF pendiente
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 md:p-5" aria-labelledby="evidence-title">
+            <SectionHeader icon={<Clock3 className="h-5 w-5" />} title="Evidencia cronológica" description="Las pruebas se ordenan por fecha del hecho antes de mostrar cualquier decisión." id="evidence-title" />
+            <ol className="mt-4 space-y-3">
+              {chronologicalEvidence.length === 0 ? (
+                <EmptyState icon={<FolderOpen className="h-5 w-5" />} title="No hay evidencia cargada" description="Carga capturas, PDFs, audios o transcripciones para habilitar el análisis." />
+              ) : chronologicalEvidence.map(evidence => (
+                <li key={evidence.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-950 text-xs font-bold text-emerald-300 ring-1 ring-emerald-800">{evidence.ordenCronologico}</span>
+                        <h3 className="text-sm font-bold text-white">{evidence.nombreArchivo}</h3>
+                      </div>
+                      <p className="mt-2 text-xs leading-relaxed text-zinc-400">{evidence.extraccion?.textoExtraido ?? 'Sin extracción disponible todavía.'}</p>
+                    </div>
+                    <div className="shrink-0 space-y-1 text-xs text-zinc-400 md:text-right">
+                      <p><span className="font-semibold text-zinc-200">Fuente:</span> {evidence.fuente}</p>
+                      <p><span className="font-semibold text-zinc-200">Fecha:</span> {formatEvidenceDate(evidence.fechaEvidencia)}</p>
+                      <p className="font-mono text-[10px] text-zinc-600">sha256: {evidence.sha256.slice(0, 10)}…</p>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 md:p-5" aria-labelledby="rules-title">
+            <SectionHeader icon={<GanttChartSquare className="h-5 w-5" />} title="Trazabilidad de reglas" description="Cada regla muestra si aplica, si bloquea o qué evidencia la respalda." id="rules-title" />
+            <div className="mt-4 grid gap-3">
+              {selectedTicket.reglas.length === 0 ? (
+                <EmptyState icon={<AlertTriangle className="h-5 w-5" />} title="Reglas pendientes" description="Aún no hay evidencia suficiente para iniciar el análisis normativo." />
+              ) : selectedTicket.reglas.map(rule => (
+                <article key={rule.id} className={`rounded-2xl border p-4 ${rule.status === 'APLICADA' ? 'border-emerald-900 bg-emerald-950/20' : 'border-amber-900 bg-amber-950/20'}`}>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        {rule.status === 'APLICADA' ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <AlertTriangle className="h-4 w-4 text-amber-400" />}
+                        <h3 className="text-sm font-bold text-white">Regla {rule.codigoPolitica}: {rule.nombre}</h3>
+                      </div>
+                      <p className="mt-2 text-xs text-zinc-400">{rule.razon}</p>
+                    </div>
+                    <span className="rounded-full border border-zinc-700 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-zinc-300">{rule.status.replaceAll('_', ' ')}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 md:p-5" aria-labelledby="result-title">
+            <SectionHeader icon={<ShieldCheck className="h-5 w-5" />} title="Resultado al cierre" description="El resultado solo aparece después de revisar evidencia y reglas." id="result-title" />
+            <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+              {selectedTicket.resultado.principal ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-xl bg-emerald-500 px-3 py-1.5 text-sm font-black text-emerald-950">{selectedTicket.resultado.principal.replaceAll('_', ' ')}</span>
+                    <span className="rounded-xl border border-zinc-700 px-3 py-1.5 text-sm font-bold text-zinc-200">{selectedTicket.resultado.subtipo?.replaceAll('_', ' ')}</span>
+                  </div>
+                  <p className="text-sm leading-relaxed text-zinc-300">{selectedTicket.resultado.textoDictamen}</p>
+                  <p className="flex items-center gap-2 text-xs text-zinc-500"><Lock className="h-3.5 w-3.5" /> La descarga PDF queda bloqueada hasta autorizar la siguiente fase.</p>
+                </div>
+              ) : (
+                <EmptyState icon={<AlertTriangle className="h-5 w-5" />} title="Sin resultado automático" description={selectedTicket.resultado.motivoRevision?.join(' · ') ?? 'Pendiente de evidencias.'} />
+              )}
+            </div>
+          </section>
+        </main>
       </div>
-
-      {/* Global Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-zinc-800 text-zinc-100 text-xs px-4 py-2.5 rounded-xl border border-zinc-700 shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
-          <span className="w-2 h-2 rounded-full bg-zinc-400"></span>
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
-      {/* MODALS */}
-      {/* 1. Evidence Viewer Drawer/Modal */}
-      <EvidenceViewer
-        evidence={viewingEvidence}
-        onClose={() => setViewingEvidence(null)}
-      />
-
-      {/* 2. Full Decision Tree & Reasoning Modal */}
-      {isDecisionTreeOpen && (
-        <DecisionTreeModal
-          decisionResult={decisionResult}
-          decisionData={selectedCase.decisionData}
-          onClose={() => setIsDecisionTreeOpen(false)}
-        />
-      )}
-
-      {/* 3. Add New Case Modal */}
-      <AddCaseModal
-        isOpen={isAddCaseOpen}
-        onClose={() => setIsAddCaseOpen(false)}
-        onAddCase={handleAddCase}
-      />
-
-      {/* 4. Attach Evidence Modal */}
-      <AttachEvidenceModal
-        isOpen={isAttachEvidenceOpen}
-        onClose={() => setIsAttachEvidenceOpen(false)}
-        onAddEvidence={handleAddEvidence}
-        currentCaseId={selectedCase?.id || 'CAVE-30274'}
-      />
     </div>
   );
+}
+
+function Badge({ label, intent = 'neutral' }: { label: string; intent?: 'neutral' | 'success' | 'warning' }) {
+  const styles = intent === 'success' ? 'border-emerald-800 bg-emerald-950 text-emerald-300' : intent === 'warning' ? 'border-amber-800 bg-amber-950 text-amber-300' : 'border-zinc-700 bg-zinc-900 text-zinc-300';
+  return <span className={`rounded-full border px-3 py-1 font-semibold ${styles}`}>{label}</span>;
+}
+
+function StatusPill({ status }: { status: Ticket['status'] }) {
+  const isGood = status === 'DICTAMEN_PROPUESTO' || status === 'PDF_EMITIDO' || status === 'CERRADO';
+  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${isGood ? 'bg-emerald-950 text-emerald-300' : 'bg-amber-950 text-amber-300'}`}>{statusLabels[status]}</span>;
+}
+
+function Info({ label, value }: { label: string; value?: string }) {
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+      <dt className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{label}</dt>
+      <dd className="mt-1 truncate font-semibold text-zinc-200">{value || 'Pendiente'}</dd>
+    </div>
+  );
+}
+
+function SectionHeader({ icon, title, description, id }: { icon: ReactNode; title: string; description: string; id: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-2 text-emerald-400">{icon}</div>
+      <div>
+        <h2 id={id} className="text-base font-bold text-white">{title}</h2>
+        <p className="mt-1 text-xs text-zinc-500">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/60 p-5 text-center">
+      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-900 text-zinc-500">{icon}</div>
+      <h3 className="mt-3 text-sm font-bold text-zinc-200">{title}</h3>
+      <p className="mt-1 text-xs text-zinc-500">{description}</p>
+    </div>
+  );
+}
+
+function formatEvidenceDate(value?: string): string {
+  if (!value) return 'Sin fecha';
+  return new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 }
