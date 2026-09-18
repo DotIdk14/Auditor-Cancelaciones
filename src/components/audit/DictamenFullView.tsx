@@ -1,14 +1,21 @@
 import { useState, useCallback, useEffect } from 'react';
-import { FileText, CheckCircle2, AlertTriangle, Edit, Copy, Download, ShieldCheck, Gavel, Save, X, FileCheck, AlertCircle } from 'lucide-react';
+import { FileText, CheckCircle2, AlertTriangle, Edit, Copy, Download, ShieldCheck, Gavel, Save, X, FileCheck, AlertCircle, ListTodo, MessageSquare } from 'lucide-react';
 import { DecisionResult } from '../../lib/decision-engine/types';
 import { usePDFGeneration } from '../../hooks/usePDFGeneration';
 import { AuditCase } from '../../types/audit';
+import { PDFPreflightResult } from '../../lib/audit/pdf-preflight';
+import { recordPdfEmission } from '../../lib/pdf';
+import { filenameForDictamen } from '../../lib/dictamen/templates';
+import { buildStudentMessage } from '../../lib/dictamen/student-message';
 
 interface DictamenFullViewProps {
   result: DecisionResult | null;
   caseData: AuditCase | null;
-  onApprove: () => void;
+  onApprove: (text?: string) => void;
   onSaveDraft: (text: string) => void;
+  preflight?: PDFPreflightResult;
+  onOpenMissingData?: () => void;
+  onPdfEmitted?: (updatedCase: AuditCase) => void;
 }
 
 const classificationLabels: Record<string, string> = {
@@ -132,6 +139,13 @@ function fieldValue(value: unknown, fallback = ''): string {
 
 function OfficialDictamenTemplate({ caseData, result, dictamenText }: { caseData: AuditCase | null; result: DecisionResult; dictamenText: string }) {
   const decisionData = (caseData?.decisionData || {}) as Record<string, unknown>;
+  const overrides = caseData?.manualOverrides || {};
+
+  const resolvedField = (source: unknown, manual?: unknown) => {
+    if (manual !== undefined && manual !== null && String(manual).trim() !== '') return manual;
+    return source;
+  };
+
   const dictamenAplicado = result.analizadoEn
     ? new Date(result.analizadoEn).toLocaleString('es-MX', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
     : new Date().toLocaleString('es-MX', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -157,16 +171,16 @@ function OfficialDictamenTemplate({ caseData, result, dictamenText }: { caseData
       <div className="grid grid-cols-3 text-black">
         <Cell label="Nombre" value={caseData?.studentName} labelClass="bg-[#d4e3e7]" />
         <Cell label="Matrícula" value={caseData?.matricula} labelClass="bg-[#d4e3e7]" />
-        <Cell label="Correo" value={fieldValue(decisionData.correo)} labelClass="bg-[#d4e3e7]" />
+        <Cell label="Correo" value={fieldValue(resolvedField(decisionData.correo, overrides.correo))} labelClass="bg-[#d4e3e7]" />
         <Cell label="Canal" value={caseData?.channel} />
         <Cell label="Programa" value={caseData?.program} />
-        <Cell label="Fecha de creación" value={fieldValue(decisionData.fechaCreacion)} />
-        <Cell label="Fecha Decisión" value={fieldValue(decisionData.fechaDecision)} />
+        <Cell label="Fecha de creación" value={fieldValue(resolvedField(decisionData.fechaCreacion, overrides.fechaCreacion))} />
+        <Cell label="Fecha Decisión" value={fieldValue(resolvedField(decisionData.fechaDecision, overrides.fechaDecision))} />
         <Cell label="Fecha de inicio de ciclo" value={caseData?.startDate} />
         <Cell label="Fecha solicitud de ticket" value={caseData?.requestDate} />
-        <Cell label="Asignado a Dictaminar" value={fieldValue(decisionData.fechaAsignadoDictaminar)} />
-        <Cell label="Última sesión" value="" />
-        <Cell label="Teléfono" value={caseData?.studentContactNumber} />
+        <Cell label="Asignado a Dictaminar" value={fieldValue(resolvedField(decisionData.fechaAsignadoDictaminar, overrides.fechaAsignadoDictaminar))} />
+        <Cell label="Última sesión" value={fieldValue(resolvedField(decisionData.ultimaSesion, overrides.ultimaSesion))} />
+        <Cell label="Teléfono" value={fieldValue(resolvedField(caseData?.studentContactNumber, overrides.telefono))} />
       </div>
 
       <div className="grid grid-cols-3">
@@ -178,8 +192,8 @@ function OfficialDictamenTemplate({ caseData, result, dictamenText }: { caseData
       <LongRow label="Política que aplica/solicitada" value={caseData?.requestedPolicy} />
       <LongRow label="Motivo" value={caseData?.requestReason} />
       <LongRow label="Descripción" value={fieldValue(decisionData.descripcion)} />
-      <LongRow label="Comentarios BO" value={fieldValue(decisionData.backOffice)} height="min-h-[48px]" />
-      <LongRow label="Comentarios HelpDesk" value={fieldValue(decisionData.helpDesk)} height="min-h-[82px]" />
+      <LongRow label="Comentarios BO" value={fieldValue(resolvedField(decisionData.backOffice, overrides.comentariosBackOffice))} height="min-h-[48px]" />
+      <LongRow label="Comentarios HelpDesk" value={fieldValue(resolvedField(decisionData.helpDesk, overrides.comentariosHelpDesk))} height="min-h-[82px]" />
       <div className="grid grid-cols-[150px_35px_1fr]">
         <div className="border border-black bg-[#fff1c9] px-2 py-1.5 text-[11px]">Jacqueline</div>
         <div className="border border-black bg-[#fff1c9]" />
@@ -188,8 +202,8 @@ function OfficialDictamenTemplate({ caseData, result, dictamenText }: { caseData
         <div className="border border-black bg-[#fff1c9]" />
         <div className="border border-black" />
       </div>
-      <LongRow label="Comentarios SER" value={fieldValue(decisionData.ser)} height="min-h-[42px]" />
-      <LongRow label="Comentarios Finanzas" value={fieldValue(decisionData.finanzas)} height="min-h-[42px]" />
+      <LongRow label="Comentarios SER" value={fieldValue(resolvedField(decisionData.ser, overrides.comentariosSER))} height="min-h-[42px]" />
+      <LongRow label="Comentarios Finanzas" value={fieldValue(resolvedField(decisionData.finanzas, overrides.comentariosFinanzas))} height="min-h-[42px]" />
       <div className="grid grid-cols-[185px_1fr]">
         <div className="border border-black bg-[#8bec6f] px-2 py-3 text-[12px] font-black italic">Dictamen aplicado el:</div>
         <div className="border border-black px-2 py-3 text-[10px]">{dictamenAplicado}</div>
@@ -238,12 +252,14 @@ function OfficialDictamenTemplate({ caseData, result, dictamenText }: { caseData
   );
 }
 
-export function DictamenFullView({ result, caseData, onApprove, onSaveDraft }: DictamenFullViewProps) {
+export function DictamenFullView({ result, caseData, onApprove, onSaveDraft, preflight, onOpenMissingData, onPdfEmitted }: DictamenFullViewProps) {
   const [editMode, setEditMode] = useState(false);
   const [dictamenText, setDictamenText] = useState('');
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [pdfGenerated, setPdfGenerated] = useState(false);
   const [pdfVersion, setPdfVersion] = useState<number | null>(null);
+  const [pdfEmittedCase, setPdfEmittedCase] = useState<AuditCase | null>(null);
+  const [messageCopied, setMessageCopied] = useState<boolean>(false);
 
   const { generatePDF, isGenerating, error: pdfError, canGenerate } = usePDFGeneration();
 
@@ -275,7 +291,10 @@ export function DictamenFullView({ result, caseData, onApprove, onSaveDraft }: D
   const handleGeneratePDF = useCallback(async () => {
     if (!caseData || !result) return;
 
-    const pdfResult = await generatePDF(caseData, result);
+    const pdfResult = await generatePDF(caseData, result, {
+      dictamenText,
+      manualOverrides: caseData.manualOverrides,
+    });
     if (pdfResult) {
       const blob = new Blob([pdfResult.pdfBytes], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
@@ -285,12 +304,32 @@ export function DictamenFullView({ result, caseData, onApprove, onSaveDraft }: D
       a.click();
       URL.revokeObjectURL(url);
 
+      const fileName = filenameForDictamen({ folio: caseData.id, estudiante: caseData.studentName });
+      const updatedCase = recordPdfEmission(caseData, pdfResult, fileName);
+      setPdfEmittedCase(updatedCase);
+      onPdfEmitted?.(updatedCase);
+
       setPdfGenerated(true);
       setPdfVersion(pdfResult.version);
     }
-  }, [caseData, result, generatePDF]);
+  }, [caseData, result, generatePDF, dictamenText, onPdfEmitted]);
 
-  const canGenerateNow = caseData && canGenerate(caseData);
+  const canGenerateNow = Boolean(caseData && result && (preflight?.canGenerate ?? canGenerate(caseData)));
+  const optionalMissingCount = preflight?.optional?.length ?? 0;
+
+  const effectiveCase = pdfEmittedCase ?? caseData;
+  const studentMessage = effectiveCase && result
+    ? buildStudentMessage({
+        estudiante: effectiveCase.studentName || 'Estudiante',
+        folio: effectiveCase.id,
+        clasificacion: result.classification,
+        fechaSolicitud: effectiveCase.requestDate,
+        medio: effectiveCase.visualFacts?.contacto?.medio?.valor === 'EMAIL' ? 'EMAIL'
+          : effectiveCase.visualFacts?.contacto?.medio?.valor === 'WHATSAPP' ? 'WHATSAPP'
+          : 'OTRO',
+      })
+    : '';
+  const pdfsCount = effectiveCase?.pdfsEmitidos?.length || 0;
 
   if (!result) {
     return (
@@ -352,7 +391,7 @@ export function DictamenFullView({ result, caseData, onApprove, onSaveDraft }: D
                 Modificar dictamen
               </button>
               <button
-                onClick={onApprove}
+                onClick={() => onApprove(dictamenText)}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-xl flex items-center gap-2"
               >
                 <CheckCircle2 className="h-4 w-4" />
@@ -399,6 +438,23 @@ export function DictamenFullView({ result, caseData, onApprove, onSaveDraft }: D
           </div>
         </div>
 
+        {optionalMissingCount > 0 && preflight?.canGenerate && (
+          <div className="px-4 py-3 bg-amber-950/30 border-b border-amber-800 flex flex-wrap items-center gap-2">
+            <ListTodo className="h-4 w-4 flex-shrink-0 text-amber-400" />
+            <span className="text-sm text-amber-200">
+              Hay {optionalMissingCount} dato(s) opcional(es) sin capturar. El PDF se genera de todos modos y se pueden completar después.
+            </span>
+            {onOpenMissingData && (
+              <button
+                onClick={onOpenMissingData}
+                className="ml-auto rounded-lg border border-amber-700 bg-amber-900/30 px-3 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-900/50"
+              >
+                Ver datos faltantes
+              </button>
+            )}
+          </div>
+        )}
+
         {pdfError && (
           <div className="px-4 py-3 bg-rose-950/30 border-b border-rose-800 flex items-center gap-2 text-rose-300 text-sm">
             <AlertTriangle className="h-4 w-4 flex-shrink-0" />
@@ -409,7 +465,7 @@ export function DictamenFullView({ result, caseData, onApprove, onSaveDraft }: D
         {pdfGenerated && (
           <div className="px-4 py-3 bg-emerald-950/30 border-b border-emerald-800 flex items-center gap-2 text-emerald-300 text-sm">
             <FileCheck className="h-4 w-4 flex-shrink-0" />
-            <span>PDF canónico generado v{pdfVersion} - SHA256 verificado</span>
+            <span>PDF canónico generado v{pdfVersion} de {effectiveCase?.pdfsEmitidos?.length || 1} - SHA256 verificado y registrado en el expediente</span>
           </div>
         )}
 
@@ -457,6 +513,29 @@ export function DictamenFullView({ result, caseData, onApprove, onSaveDraft }: D
           </button>
         </div>
       </div>
+
+      {studentMessage && (
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden">
+          <div className="p-4 border-b border-zinc-800 bg-zinc-900/60 flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-emerald-400" />
+              Mensaje para el alumno
+            </h3>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(studentMessage);
+                setMessageCopied(true);
+                setTimeout(() => setMessageCopied(false), 2000);
+              }}
+              className="px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 font-medium text-xs flex items-center gap-1.5"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              {messageCopied ? 'Copiado' : 'Copiar'}
+            </button>
+          </div>
+          <p className="whitespace-pre-wrap p-5 text-sm leading-relaxed text-zinc-200">{studentMessage}</p>
+        </div>
+      )}
 
       {showTemplateSelector && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-xs animate-in fade-in duration-200">

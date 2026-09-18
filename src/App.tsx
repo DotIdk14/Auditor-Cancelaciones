@@ -1,6 +1,5 @@
-import { useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
+import { useState, useCallback, useEffect, useMemo, type FormEvent, type ReactNode } from 'react';
 import { ShieldCheck, Plus, AlertTriangle, CheckCircle2, FileText, FolderOpen, Gavel, Headphones, Menu, Scale, X } from 'lucide-react';
-import { mockAuditCases } from './mock/audit-cases';
 import { AuditCase, EvidenceItem } from './types/audit';
 import { CaseHeader } from './components/audit/CaseHeader';
 import { CallTranscript } from './components/audit/CallTranscript';
@@ -18,6 +17,11 @@ import { ExternalLinksPanel } from './components/audit/ExternalLinksPanel';
 import { ExternalLinkViewer } from './components/audit/ExternalLinkViewer';
 import { AttachEvidenceModal } from './components/audit/AttachEvidenceModal';
 import { EvidenceViewer } from './components/audit/EvidenceViewer';
+import { MissingDataView } from './components/audit/MissingDataView';
+import { DetectedFactsPanel } from './components/audit/DetectedFactsPanel';
+import { ManualOverrides } from './types/audit';
+import { runPDFPreflight } from './lib/audit/pdf-preflight';
+import { useInsforgeBackend } from './hooks/useInsforgeBackend';
 
 const statusLabels: Record<AuditCase['status'], string> = {
   EN_ANALISIS: 'En análisis',
@@ -27,7 +31,7 @@ const statusLabels: Record<AuditCase['status'], string> = {
   RECHAZADO: 'Rechazado'
 };
 
-type AuditTab = 'summary' | 'call' | 'evidences' | 'analysis' | 'dictamen';
+type AuditTab = 'summary' | 'call' | 'evidences' | 'analysis' | 'dictamen' | 'missing-data' | 'facts';
 
 function StatusPill({ status }: { status: AuditCase['status'] }) {
   const isGood = status === 'DICTAMINADO' || status === 'APROBADO';
@@ -55,9 +59,140 @@ function HeaderMetric({ icon, label, value }: { icon: ReactNode; label: string; 
   );
 }
 
+function toInputDate(value: string) {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const parts = value.split('/');
+  if (parts.length === 3) {
+    const [day, month, year] = parts;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().split('T')[0];
+}
+
+function toDisplayDate(value: string) {
+  return value ? value.split('-').reverse().join('/') : 'Sin fecha';
+}
+
+function getDaysBetween(startDate: string, requestDate: string) {
+  if (!startDate || !requestDate) return 0;
+  const start = new Date(startDate);
+  const request = new Date(requestDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(request.getTime())) return 0;
+  return Math.ceil((request.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function CaseDetailsEditModal({
+  caseData,
+  onClose,
+  onSave,
+}: {
+  caseData: AuditCase;
+  onClose: () => void;
+  onSave: (updates: Partial<AuditCase>) => void;
+}) {
+  const [studentName, setStudentName] = useState(caseData.studentName || '');
+  const [matricula, setMatricula] = useState(caseData.matricula || '');
+  const [program, setProgram] = useState(caseData.program || '');
+  const [channel, setChannel] = useState(caseData.channel || '');
+  const [phone, setPhone] = useState(caseData.studentContactNumber || '');
+  const [startDate, setStartDate] = useState(toInputDate(caseData.decisionData?.fechaInicio || caseData.startDate));
+  const [requestDate, setRequestDate] = useState(toInputDate(caseData.decisionData?.fechaSolicitud || caseData.requestDate));
+  const [reason, setReason] = useState(caseData.requestReason || '');
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    const daysFromStart = getDaysBetween(startDate, requestDate);
+
+    onSave({
+      studentName: studentName || 'Alumno sin nombre',
+      matricula: matricula || 'Sin matricula',
+      program: program || 'Programa no especificado',
+      channel: channel || 'DIGITAL_FACEBOOK_ADS',
+      studentContactNumber: phone,
+      startDate: toDisplayDate(startDate),
+      requestDate: toDisplayDate(requestDate),
+      daysFromStart,
+      workingDaysFromStart: Math.max(0, Math.min(daysFromStart, 10)),
+      requestReason: reason || 'Motivo pendiente de documentar',
+      decisionData: {
+        ...caseData.decisionData,
+        fechaInicio: startDate,
+        fechaSolicitud: requestDate,
+        programa: program || '',
+        canalVenta: channel || 'DIGITAL_FACEBOOK_ADS',
+        motivoSolicitud: reason || '',
+        diasHabilesDesdeInicio: Math.max(0, Math.min(daysFromStart, 10)),
+        semanasDesdeInicio: Math.max(0, Math.ceil(daysFromStart / 7)),
+      },
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/75" onClick={onClose} />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <form onSubmit={handleSubmit} className="w-full max-w-2xl rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl">
+          <div className="flex items-center justify-between border-b border-zinc-800 p-4">
+            <div>
+              <h2 className="font-bold text-white">Editar datos del caso</h2>
+              <p className="text-xs text-zinc-500">Estos campos dan contexto y se pueden ajustar después de crear el expediente.</p>
+            </div>
+            <button type="button" onClick={onClose} className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white" aria-label="Cerrar edición">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="grid gap-3 p-4 sm:grid-cols-2">
+            <label className="space-y-1 text-xs font-semibold text-zinc-400">
+              Nombre
+              <input value={studentName} onChange={e => setStudentName(e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500" />
+            </label>
+            <label className="space-y-1 text-xs font-semibold text-zinc-400">
+              Matrícula
+              <input value={matricula} onChange={e => setMatricula(e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500" />
+            </label>
+            <label className="space-y-1 text-xs font-semibold text-zinc-400 sm:col-span-2">
+              Programa
+              <input value={program} onChange={e => setProgram(e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500" />
+            </label>
+            <label className="space-y-1 text-xs font-semibold text-zinc-400">
+              Canal
+              <input value={channel} onChange={e => setChannel(e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500" />
+            </label>
+            <label className="space-y-1 text-xs font-semibold text-zinc-400">
+              Teléfono
+              <input value={phone} onChange={e => setPhone(e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500" />
+            </label>
+            <label className="space-y-1 text-xs font-semibold text-zinc-400">
+              Inicio de clases
+              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500" />
+            </label>
+            <label className="space-y-1 text-xs font-semibold text-zinc-400">
+              Fecha de solicitud
+              <input type="date" value={requestDate} onChange={e => setRequestDate(e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500" />
+            </label>
+            <label className="space-y-1 text-xs font-semibold text-zinc-400 sm:col-span-2">
+              Motivo
+              <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3} className="w-full resize-none rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500" />
+            </label>
+          </div>
+
+          <div className="flex justify-end gap-3 border-t border-zinc-800 p-4">
+            <button type="button" onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-semibold text-zinc-400 hover:bg-zinc-800 hover:text-white">Cancelar</button>
+            <button type="submit" className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500">Guardar cambios</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
-  const [tickets, setTickets] = useState<AuditCase[]>(mockAuditCases);
-  const [selectedTicketId, setSelectedTicketId] = useState(tickets[0]?.id ?? '');
+  const backend = useInsforgeBackend();
+  const tickets = backend.cases;
+  const [selectedTicketId, setSelectedTicketId] = useState('');
   const [activeTab, setActiveTab] = useState<AuditTab>('summary');
   const [decisionResult, setDecisionResult] = useState<DecisionResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -66,6 +201,7 @@ export default function App() {
   const [viewingEvidence, setViewingEvidence] = useState<any>(null);
   const [viewingExternalLink, setViewingExternalLink] = useState<{ url: string; label: string } | null>(null);
   const [showAttachModal, setShowAttachModal] = useState(false);
+  const [isEditCaseOpen, setIsEditCaseOpen] = useState(false);
   const [audioState, setAudioState] = useState({
     isPlaying: false,
     currentTime: 0,
@@ -91,55 +227,76 @@ export default function App() {
     try {
       const decisionDataWithEvidence = {
         ...selectedTicket.decisionData,
-        evidences: selectedTicket.evidences,
+        evidences: (selectedTicket.evidences || []).map(e => ({
+          id: e.id,
+          type: e.type,
+          title: e.name,
+          source: e.source,
+          date: e.date,
+          description: e.description,
+          url: e.fileUrl,
+        })),
       };
       const result = analyzeCancellationCase(decisionDataWithEvidence);
       setDecisionResult(result);
+      backend.persistEvaluation(selectedTicket.id, decisionDataWithEvidence);
     } catch (error) {
       console.error('Error analyzing case:', error);
     } finally {
       setIsAnalyzing(false);
     }
-  }, [selectedTicket]);
+  }, [selectedTicket, backend]);
+
+  useEffect(() => {
+    if (tickets.length > 0 && !tickets.some(t => t.id === selectedTicketId)) {
+      setSelectedTicketId(tickets[0].id);
+    }
+  }, [tickets, selectedTicketId]);
 
   useEffect(() => {
     runAnalysis();
   }, [selectedTicketId, runAnalysis]);
 
   const handleAddCall = useCallback((newCall: any) => {
-    setTickets(prev => prev.map(t => {
-      if (t.id === selectedTicketId) {
-        const secondaryCalls = t.secondaryCalls || [];
-        return { ...t, secondaryCalls: [...secondaryCalls, newCall] };
-      }
-      return t;
-    }));
-  }, [selectedTicketId]);
+    const secondaryCalls = [...(selectedTicket.secondaryCalls || []), newCall];
+    backend.updateCase(selectedTicketId, { secondaryCalls }).catch(error => {
+      console.error('Error guardando llamada:', error);
+    });
+  }, [backend, selectedTicketId, selectedTicket]);
 
-  const handleAddCase = useCallback((newCase: AuditCase) => {
-    setTickets(prev => [newCase, ...prev]);
-    setSelectedTicketId(newCase.id);
-    setIsAddCaseOpen(false);
-  }, []);
+const handleAddCase = useCallback(async (newCase: AuditCase, files?: File[]) => {
+    try {
+      await backend.addCase(newCase, files);
+      setSelectedTicketId(newCase.id);
+      setIsAddCaseOpen(false);
+    } catch (error) {
+      console.error('Error creando expediente en backend:', error);
+      setIsAddCaseOpen(false);
+    }
+  }, [backend]);
 
-  const handleAttachEvidence = useCallback((newEvidence: EvidenceItem) => {
-    setTickets(prev => prev.map(t => {
-      if (t.id === selectedTicketId) {
-        return { ...t, evidences: [...t.evidences, newEvidence] };
-      }
-      return t;
-    }));
-    setShowAttachModal(false);
-  }, [selectedTicketId]);
+const handleAttachEvidence = useCallback(async (newEvidence: EvidenceItem, file?: File | null) => {
+    try {
+      await backend.attachEvidence(selectedTicketId, newEvidence, file);
+    } catch (error) {
+      console.error('Error adjuntando evidencia al backend:', error);
+    } finally {
+      setShowAttachModal(false);
+    }
+  }, [backend, selectedTicketId]);
 
-  const handleRemoveEvidence = useCallback((id: string) => {
-    setTickets(prev => prev.map(t => {
-      if (t.id === selectedTicketId) {
-        return { ...t, evidences: t.evidences.filter(e => e.id !== id) };
-      }
-      return t;
-    }));
-  }, [selectedTicketId]);
+const handleRemoveEvidence = useCallback((id: string) => {
+    backend.removeEvidence(selectedTicketId, id).catch(error => {
+      console.error('Error eliminando evidencia:', error);
+    });
+  }, [backend, selectedTicketId]);
+
+const handleUpdateCaseDetails = useCallback((updates: Partial<AuditCase>) => {
+    backend.updateCase(selectedTicketId, updates).catch(error => {
+      console.error('Error actualizando expediente:', error);
+    });
+    setIsEditCaseOpen(false);
+  }, [backend, selectedTicketId]);
 
   const handlePreviousCase = useCallback(() => {
     const currentIndex = tickets.findIndex(t => t.id === selectedTicketId);
@@ -157,23 +314,17 @@ export default function App() {
     }
   }, [selectedTicketId, tickets]);
 
-  const handleApproveDictamen = useCallback(() => {
-    setTickets(prev => prev.map(t => {
-      if (t.id === selectedTicketId) {
-        return {
-          ...t,
-          status: 'APROBADO' as const,
-          dictamen: {
-            ...t.dictamen,
-            status: 'APROBADO',
-            approvedBy: 'Auditor Principal',
-            approvedAt: new Date().toISOString()
-          }
-        };
-      }
-      return t;
-    }));
-  }, [selectedTicketId, decisionResult]);
+  const handleApproveDictamen = useCallback((text?: string) => {
+    backend.approveDictamen(selectedTicket.id, text).catch(error => {
+      console.error('Error aprobando dictamen:', error);
+    });
+  }, [backend, selectedTicket]);
+
+const handleSaveDictamenDraft = useCallback((text: string) => {
+    backend.saveDictamen(selectedTicket.id, { text, status: 'PENDIENTE_REVISION' }).catch(error => {
+      console.error('Error guardando dictamen:', error);
+    });
+  }, [backend, selectedTicket.id]);
 
   const stats = useMemo(() => ({
     total: tickets.length,
@@ -181,7 +332,31 @@ export default function App() {
     revision: tickets.filter(t => t.status === 'PENDIENTE_REVISION').length
   }), [tickets]);
 
+  const preflight = useMemo(
+    () => runPDFPreflight(selectedTicket, decisionResult),
+    [selectedTicket, decisionResult]
+  );
+
+  const handleSaveOverrides = useCallback((updates: Partial<ManualOverrides>) => {
+    const current = selectedTicket.manualOverrides || {};
+    const next = { ...current };
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === undefined || value === null || value === '') {
+        delete (next as Record<string, unknown>)[key];
+      } else {
+        (next as Record<string, unknown>)[key] = value;
+      }
+    }
+    backend.updateCase(selectedTicketId, { manualOverrides: next }).catch(error => {
+      console.error('Error guardando datos faltantes:', error);
+    });
+  }, [backend, selectedTicketId, selectedTicket]);
+
   const primaryCallDuration = selectedTicket.primaryCall?.durationSeconds || 0;
+
+  if (backend.loading && tickets.length === 0) {
+    return <main className="min-h-screen bg-zinc-950 text-zinc-100 p-8 flex items-center justify-center text-zinc-400">Cargando expedientes del backend...</main>;
+  }
 
   if (!selectedTicket) {
     return <main className="min-h-screen bg-zinc-950 text-zinc-100 p-8">Sin tickets disponibles.</main>;
@@ -192,7 +367,9 @@ export default function App() {
     { id: 'call', label: 'Transcriptor' },
     { id: 'evidences', label: 'Evidencias' },
     { id: 'analysis', label: 'Análisis' },
-    { id: 'dictamen', label: 'Dictamen' }
+    { id: 'dictamen', label: 'Dictamen' },
+    { id: 'missing-data', label: 'Datos faltantes' },
+    { id: 'facts', label: 'Hechos visuales' }
   ];
 
   return (
@@ -323,22 +500,30 @@ export default function App() {
                         <h2 className="text-lg font-bold text-white">Síntesis del expediente</h2>
                         <p className="mt-1 text-sm text-zinc-500">Vista de trabajo rápida; abre cada módulo para revisar detalle sin perder pantalla.</p>
                       </div>
-                      <button
-                        onClick={() => setActiveTab('analysis')}
-                        className="rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-500"
-                      >
-                        Ver análisis
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => setIsEditCaseOpen(true)}
+                          className="rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-semibold text-zinc-200 hover:bg-zinc-700"
+                        >
+                          Editar datos
+                        </button>
+                        <button
+                          onClick={() => setActiveTab('analysis')}
+                          className="rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-500"
+                        >
+                          Ver análisis
+                        </button>
+                      </div>
                     </div>
                     <div className="mt-5 grid gap-4 lg:grid-cols-2">
                       <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
                         <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                          {decisionResult?.missingEvidence.length ? <AlertTriangle className="h-4 w-4 text-amber-400" /> : <CheckCircle2 className="h-4 w-4 text-emerald-400" />}
+                          {(decisionResult?.missingEvidence || []).length ? <AlertTriangle className="h-4 w-4 text-amber-400" /> : <CheckCircle2 className="h-4 w-4 text-emerald-400" />}
                           Validación de evidencias
                         </div>
                         <p className="mt-2 text-sm text-zinc-400">
-                          {decisionResult?.missingEvidence.length
-                            ? `${decisionResult.missingEvidence.length} evidencia(s) faltante(s) para cerrar con trazabilidad completa.`
+                          {(decisionResult?.missingEvidence || []).length
+                            ? `${(decisionResult?.missingEvidence || []).length} evidencia(s) faltante(s) para cerrar con trazabilidad completa.`
                             : 'No hay evidencias faltantes reportadas por el motor.'}
                         </p>
                       </div>
@@ -438,8 +623,27 @@ export default function App() {
                 result={decisionResult}
                 caseData={selectedTicket}
                 onApprove={handleApproveDictamen}
-                onSaveDraft={(text) => {}}
+                onSaveDraft={handleSaveDictamenDraft}
+                preflight={preflight}
+                onOpenMissingData={() => setActiveTab('missing-data')}
+                onPdfEmitted={(updatedCase) =>
+                  backend.updateCase(selectedTicket.id, { pdfsEmitidos: updatedCase.pdfsEmitidos }).catch(console.error)
+                }
               />
+            )}
+
+            {activeTab === 'missing-data' && (
+              <MissingDataView
+                caseData={selectedTicket}
+                result={decisionResult}
+                preflight={preflight}
+                onSaveOverrides={handleSaveOverrides}
+                onGoToDictamen={() => setActiveTab('dictamen')}
+              />
+            )}
+
+            {activeTab === 'facts' && (
+              <DetectedFactsPanel caseData={selectedTicket} />
             )}
           </div>
         </main>
@@ -488,6 +692,14 @@ export default function App() {
           onClose={() => setShowAttachModal(false)}
           onAddEvidence={handleAttachEvidence}
           currentCaseId={selectedTicket.id}
+        />
+      )}
+
+      {isEditCaseOpen && (
+        <CaseDetailsEditModal
+          caseData={selectedTicket}
+          onClose={() => setIsEditCaseOpen(false)}
+          onSave={handleUpdateCaseDetails}
         />
       )}
     </div>

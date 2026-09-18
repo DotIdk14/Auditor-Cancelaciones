@@ -31,7 +31,10 @@ export function CaseAnalysis({ result, onViewDecisionTree }: CaseAnalysisProps) 
     );
   }
 
-  const determinantRules = result.appliedRules.filter(r => r.status === 'DETERMINANTE');
+  const appliedRules = result.appliedRules || [];
+  const hardBlockers = result.hardBlockers || [];
+  const conflicts = result.conflicts || [];
+  const determinantRules = appliedRules.filter(r => r.status === 'DETERMINANTE');
   const confidencePercent = Math.round(result.confidence * 100);
 
   return (
@@ -89,14 +92,14 @@ export function CaseAnalysis({ result, onViewDecisionTree }: CaseAnalysisProps) 
           <p className="text-sm text-zinc-300 ml-6">{result.rootCause.replace(/_/g, ' ').toLowerCase()}</p>
         </div>
 
-        {result.hardBlockers.length > 0 && (
+        {hardBlockers.length > 0 && (
           <div className="rounded-xl border border-rose-800 bg-rose-950/30 p-3">
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="h-4 w-4 text-rose-400" />
               <span className="font-medium text-rose-300">Bloqueos Duros Detectados</span>
             </div>
             <ul className="ml-6 space-y-1 text-sm text-rose-200">
-              {result.hardBlockers.map((blocker, i) => (
+              {hardBlockers.map((blocker, i) => (
                 <li key={i} className="flex items-center gap-1">
                   <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
                   {blocker.replace(/_/g, ' ').toLowerCase()}
@@ -128,14 +131,14 @@ export function CaseAnalysis({ result, onViewDecisionTree }: CaseAnalysisProps) 
           )}
         </div>
 
-        {result.conflicts && result.conflicts.length > 0 && (
+        {conflicts.length > 0 && (
           <div className="rounded-xl border border-amber-800 bg-amber-950/30 p-3">
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="h-4 w-4 text-amber-400" />
               <span className="font-medium text-amber-300">Conflictos Resueltos</span>
             </div>
             <p className="text-sm text-amber-200 ml-6">
-              {result.conflicts.length} conflicto{result.conflicts.length > 1 ? 's' : ''} resuelto{result.conflicts.length > 1 ? 's' : ''} por precedencia normativa
+              {conflicts.length} conflicto{conflicts.length > 1 ? 's' : ''} resuelto{conflicts.length > 1 ? 's' : ''} por precedencia normativa
             </p>
           </div>
         )}

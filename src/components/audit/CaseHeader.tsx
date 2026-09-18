@@ -11,7 +11,8 @@ import {
   ChevronRight,
   ChevronLeft,
   ShieldCheck,
-  FileCheck
+  FileCheck,
+  Inspect
 } from 'lucide-react';
 import { AuditCase, CaseStatus } from '../../types/audit';
 
@@ -39,7 +40,9 @@ const tabIcons: Record<string, ReactNode> = {
   call: <Headphones className="h-4 w-4" />,
   evidences: <Search className="h-4 w-4" />,
   analysis: <Scale className="h-4 w-4" />,
-  dictamen: <Gavel className="h-4 w-4" />
+  dictamen: <Gavel className="h-4 w-4" />,
+  'missing-data': <FileCheck className="h-4 w-4" />,
+  facts: <Inspect className="h-4 w-4" />
 };
 
 export function CaseHeader({

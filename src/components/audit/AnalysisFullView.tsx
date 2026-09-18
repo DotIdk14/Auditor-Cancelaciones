@@ -41,9 +41,14 @@ export function AnalysisFullView({ result, onViewDecisionTree }: AnalysisFullVie
     );
   }
 
-  const groupedApplied = groupByPriority(result.appliedRules);
-  const groupedRejected = groupByPriority(result.rejectedRules);
-  const determinantRules = result.appliedRules.filter(rule => rule.status === 'DETERMINANTE');
+  const appliedRules = result.appliedRules || [];
+  const rejectedRules = result.rejectedRules || [];
+  const missingEvidence = result.missingEvidence || [];
+  const conflicts = result.conflicts || [];
+  const reasoning = result.reasoning || [];
+  const groupedApplied = groupByPriority(appliedRules);
+  const groupedRejected = groupByPriority(rejectedRules);
+  const determinantRules = appliedRules.filter(rule => rule.status === 'DETERMINANTE');
 
   return (
     <div className="space-y-4">
@@ -70,7 +75,7 @@ export function AnalysisFullView({ result, onViewDecisionTree }: AnalysisFullVie
         />
         <MetricCard icon={<Target className="h-4 w-4 text-sky-400" />} label="Confianza" value={`${Math.round(result.confidence * 100)}%`} />
         <MetricCard icon={<Scale className="h-4 w-4 text-amber-400" />} label="Causa raíz" value={result.rootCause.replace(/_/g, ' ').toLowerCase()} />
-        <MetricCard icon={<Search className="h-4 w-4 text-rose-400" />} label="Faltantes" value={String(result.missingEvidence.length)} />
+        <MetricCard icon={<Search className="h-4 w-4 text-rose-400" />} label="Faltantes" value={String(missingEvidence.length)} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -81,7 +86,7 @@ export function AnalysisFullView({ result, onViewDecisionTree }: AnalysisFullVie
                 <CheckCircle2 className="h-4 w-4 text-emerald-400" />
                 Reglas aplicadas
               </h3>
-              <span className="rounded-full bg-emerald-950/40 px-2 py-1 text-xs font-semibold text-emerald-300">{result.appliedRules.length}</span>
+              <span className="rounded-full bg-emerald-950/40 px-2 py-1 text-xs font-semibold text-emerald-300">{appliedRules.length}</span>
             </div>
             <RuleGroups groups={groupedApplied} tone="success" />
           </section>
@@ -92,7 +97,7 @@ export function AnalysisFullView({ result, onViewDecisionTree }: AnalysisFullVie
                 <AlertTriangle className="h-4 w-4 text-amber-400" />
                 Reglas descartadas
               </h3>
-              <span className="rounded-full bg-amber-950/40 px-2 py-1 text-xs font-semibold text-amber-300">{result.rejectedRules.length}</span>
+              <span className="rounded-full bg-amber-950/40 px-2 py-1 text-xs font-semibold text-amber-300">{rejectedRules.length}</span>
             </div>
             <RuleGroups groups={groupedRejected} tone="warning" />
           </section>
@@ -116,19 +121,19 @@ export function AnalysisFullView({ result, onViewDecisionTree }: AnalysisFullVie
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
             <h3 className="font-bold text-white">Pendientes</h3>
             <div className="mt-3 space-y-2">
-              {result.missingEvidence.length === 0 ? (
+              {missingEvidence.length === 0 ? (
                 <p className="text-sm text-zinc-500">No hay evidencias faltantes.</p>
-              ) : result.missingEvidence.map((item, index) => (
+              ) : missingEvidence.map((item, index) => (
                 <p key={index} className="rounded-xl border border-sky-900/60 bg-sky-950/20 p-3 text-sm text-sky-200">{item}</p>
               ))}
             </div>
           </section>
 
-          {result.conflicts.length > 0 && (
+          {conflicts.length > 0 && (
             <section className="rounded-2xl border border-rose-900/70 bg-rose-950/20 p-4">
               <h3 className="font-bold text-white">Conflictos resueltos</h3>
               <div className="mt-3 space-y-2">
-                {result.conflicts.map((conflict, index) => (
+                {conflicts.map((conflict, index) => (
                   <details key={index} className="group rounded-xl border border-rose-900/60 bg-zinc-950/40 p-3">
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-rose-200">
                       Conflicto {index + 1}
@@ -149,7 +154,7 @@ export function AnalysisFullView({ result, onViewDecisionTree }: AnalysisFullVie
           <ChevronRight className="h-5 w-5 text-zinc-500 transition-transform group-open:rotate-90" />
         </summary>
         <div className="mt-4 space-y-2 text-sm leading-relaxed text-zinc-300">
-          {result.reasoning.map((step, index) => (
+          {reasoning.map((step, index) => (
             <p key={index} className="flex gap-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
               <span className="font-mono font-bold text-sky-400">{index + 1}</span>
               <span>{step}</span>
@@ -211,7 +216,7 @@ function RuleGroups({ groups, tone }: { groups: Record<number, any[]>; tone: 'su
   );
 }
 
-function groupByPriority<T extends { priority: number }>(rules: T[]) {
+function groupByPriority<T extends { priority: number }>(rules: T[] = []) {
   return rules.reduce((acc, rule) => {
     if (!acc[rule.priority]) acc[rule.priority] = [];
     acc[rule.priority].push(rule);

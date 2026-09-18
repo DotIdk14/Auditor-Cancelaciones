@@ -16,6 +16,7 @@
     "server:dev": "tsx watch server.ts"
   },
   "dependencies": {
+    "@insforge/sdk": "^1.5.2",
     "@tailwindcss/vite": "^4.1.14",
     "@types/multer": "^2.2.0",
     "@vitejs/plugin-react": "^5.0.4",

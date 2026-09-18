@@ -14,7 +14,45 @@ const FieldSchema = z.object({
   conflicto: z.string().nullable().optional(),
 }).strict();
 
+/**
+ * Fase 1 — Hechos visuales extraídos de capturas de Aula Virtual / SIU
+ * y PDFs FireShot renderizados a imagen. Solo hechos observables, sin
+ * interpretación de política.
+ */
+const VisualFactsSchema = z.object({
+  aula_virtual: z.object({
+    ingreso_aula: FieldSchema,
+    ultimo_acceso_curso: FieldSchema,
+    hora_acceso: FieldSchema,
+    curso: FieldSchema,
+    grupo: FieldSchema,
+    calificacion: FieldSchema,
+    actividades_entregadas: FieldSchema,
+    clics_detectados: FieldSchema,
+    materias_cargadas: FieldSchema,
+    seleccion_modalidad: FieldSchema,
+  }).strict(),
+  siu: z.object({
+    estatus_alumno: FieldSchema,
+    ultima_sesion: FieldSchema,
+    fecha_inicio: FieldSchema,
+    primer_pago: FieldSchema,
+    proximo_pago_monto: FieldSchema,
+    telefono: FieldSchema,
+    correo: FieldSchema,
+    calificaciones_registradas: FieldSchema,
+  }).strict(),
+  contacto: z.object({
+    telefono_registrado: FieldSchema,
+    correo_registrado: FieldSchema,
+    medio: FieldSchema,
+    ultima_interaccion: FieldSchema,
+  }).strict(),
+}).strict();
+
 export const ExtractionResultSchema = z.object({
+  /** Fase 2 — clasificación de esta evidencia (resultado por archivo). */
+  tipo_evidencia: FieldSchema.optional(),
   estudiante: z.object({
     folio: FieldSchema,
     matricula: FieldSchema,
@@ -57,6 +95,7 @@ export const ExtractionResultSchema = z.object({
     texto_citado: z.string().nullable().optional(),
     textoCitado: z.string().nullable().optional(),
   }).strict()),
+  visual_facts: VisualFactsSchema.optional(),
 }).strict();
 
 export type ValidatedExtractionResult = z.infer<typeof ExtractionResultSchema>;

@@ -9,6 +9,7 @@ import {
   ExtractedFact,
   ConflictItem,
   FieldConfidence,
+  EvidenceClassification,
 } from './types.js';
 import { UsageCollector } from '../ai/usage.js';
 import { getExtractionConcurrency } from '../ai/models.js';
@@ -76,6 +77,7 @@ function emptyField<T = string>(valor: T | null = null, confianza: FieldConfiden
 function emptyExtraction(evidenceId: string | null = null): ValidatedExtractionResult {
   const field = () => ({ valor: null, confianza: 'BAJA' as const, evidencia_id: evidenceId, pagina: null, timestamp: null, texto_citado: null });
   return {
+    tipo_evidencia: field(),
     estudiante: {
       folio: field(), matricula: field(), nombre: field(), nivel: field(), programa: field(), canal: field(), telefono: field(),
     },
@@ -88,6 +90,19 @@ function emptyExtraction(evidenceId: string | null = null): ValidatedExtractionR
       retencion_realizada: field(), retencion_aceptada: field(), intencion_cancelacion_manifiesta: field(),
     },
     hechos: [],
+    visual_facts: {
+      aula_virtual: {
+        ingreso_aula: field(), ultimo_acceso_curso: field(), hora_acceso: field(), curso: field(), grupo: field(),
+        calificacion: field(), actividades_entregadas: field(), clics_detectados: field(), materias_cargadas: field(), seleccion_modalidad: field(),
+      },
+      siu: {
+        estatus_alumno: field(), ultima_sesion: field(), fecha_inicio: field(), primer_pago: field(), proximo_pago_monto: field(),
+        telefono: field(), correo: field(), calificaciones_registradas: field(),
+      },
+      contacto: {
+        telefono_registrado: field(), correo_registrado: field(), medio: field(), ultima_interaccion: field(),
+      },
+    },
   };
 }
 
@@ -132,6 +147,8 @@ function confidenceRank(confidence: FieldConfidence): number {
 function mergeExtractionResults(results: ValidatedExtractionResult[]): Partial<DraftCase> {
   const source = results.length > 0 ? results : [emptyExtraction()];
   const pick = (section: 'estudiante' | 'solicitud' | 'indicadores', key: string) => mergeField(source.map(result => (result as any)[section][key]));
+  const pickVisual = (section: 'aula_virtual' | 'siu' | 'contacto', key: string) =>
+    mergeField(source.map(result => (result as any).visual_facts?.[section]?.[key]));
 
   return {
     student: {
@@ -144,26 +161,56 @@ function mergeExtractionResults(results: ValidatedExtractionResult[]): Partial<D
       telefono: pick('estudiante', 'telefono'),
     } as any,
     request: {
-      fecha_inicio: pick('solicitud', 'fecha_inicio'),
-      fecha_solicitud: pick('solicitud', 'fecha_solicitud'),
+      fechaInicio: pick('solicitud', 'fecha_inicio'),
+      fechaSolicitud: pick('solicitud', 'fecha_solicitud'),
       motivo: pick('solicitud', 'motivo'),
     } as any,
     academic: {
-      contacto_efectivo: pick('indicadores', 'contacto_efectivo'),
+      contactoEfectivo: pick('indicadores', 'contacto_efectivo'),
       llamadas: pick('indicadores', 'llamadas'),
       mensajes: pick('indicadores', 'mensajes'),
-      ingreso_aula: pick('indicadores', 'ingreso_aula'),
-      materias_cargadas: pick('indicadores', 'materias_cargadas'),
-      falla_carga_materias: pick('indicadores', 'falla_carga_materias'),
+      ingresoAula: pick('indicadores', 'ingreso_aula'),
+      materiasCargadas: pick('indicadores', 'materias_cargadas'),
+      fallaCargaMaterias: pick('indicadores', 'falla_carga_materias'),
       calificaciones: pick('indicadores', 'calificaciones'),
-      errores_operativos: pick('indicadores', 'errores_operativos'),
-      errores_financieros: pick('indicadores', 'errores_financieros'),
-      error_inscripcion: pick('indicadores', 'error_inscripcion'),
-      promesa_venta: pick('indicadores', 'promesa_venta'),
-      retencion_realizada: pick('indicadores', 'retencion_realizada'),
-      retencion_aceptada: pick('indicadores', 'retencion_aceptada'),
-      intencion_cancelacion_manifiesta: pick('indicadores', 'intencion_cancelacion_manifiesta'),
+      erroresOperativos: pick('indicadores', 'errores_operativos'),
+      erroresFinancieros: pick('indicadores', 'errores_financieros'),
+      errorInscripcion: pick('indicadores', 'error_inscripcion'),
+      promesaVenta: pick('indicadores', 'promesa_venta'),
+      retencionRealizada: pick('indicadores', 'retencion_realizada'),
+      retencionAceptada: pick('indicadores', 'retencion_aceptada'),
+      intencionCancelacionManifiesta: pick('indicadores', 'intencion_cancelacion_manifiesta'),
     } as any,
+    visualFacts: {
+      aulaVirtual: {
+        ingresoAula: pickVisual('aula_virtual', 'ingreso_aula'),
+        ultimoAccesoCurso: pickVisual('aula_virtual', 'ultimo_acceso_curso'),
+        horaAcceso: pickVisual('aula_virtual', 'hora_acceso'),
+        curso: pickVisual('aula_virtual', 'curso'),
+        grupo: pickVisual('aula_virtual', 'grupo'),
+        calificacion: pickVisual('aula_virtual', 'calificacion'),
+        actividadesEntregadas: pickVisual('aula_virtual', 'actividades_entregadas'),
+        clicsDetectados: pickVisual('aula_virtual', 'clics_detectados'),
+        materiasCargadas: pickVisual('aula_virtual', 'materias_cargadas'),
+        seleccionModalidad: pickVisual('aula_virtual', 'seleccion_modalidad'),
+      },
+      siu: {
+        estatusAlumno: pickVisual('siu', 'estatus_alumno'),
+        ultimaSesion: pickVisual('siu', 'ultima_sesion'),
+        fechaInicio: pickVisual('siu', 'fecha_inicio'),
+        primerPago: pickVisual('siu', 'primer_pago'),
+        proximoPagoMonto: pickVisual('siu', 'proximo_pago_monto'),
+        telefono: pickVisual('siu', 'telefono'),
+        correo: pickVisual('siu', 'correo'),
+        calificacionesRegistradas: pickVisual('siu', 'calificaciones_registradas'),
+      },
+      contacto: {
+        telefonoRegistrado: pickVisual('contacto', 'telefono_registrado'),
+        correoRegistrado: pickVisual('contacto', 'correo_registrado'),
+        medio: pickVisual('contacto', 'medio'),
+        ultimaInteraccion: pickVisual('contacto', 'ultima_interaccion'),
+      },
+    },
     evidencias: [],
     conflictos: [],
     completitud: 0,
@@ -252,7 +299,8 @@ async function processSingleEvidence(ev: InternalEvidenceDraft, usage: UsageColl
     return extraction.result;
   }
 
-  const pages = await renderPdfPagesToImages(ev.file.buffer, 3);
+  // PDF FireShot / escaneado sin texto seleccionable: renderizar a imagen y usar visión
+  const pages = await renderPdfPagesToImages(ev.file.buffer, 6);
   const results: ValidatedExtractionResult[] = [];
   const allFacts: ExtractedFact[] = [];
   for (const page of pages) {
@@ -300,12 +348,14 @@ export async function processEvidences(files: MulterFile[]): Promise<ProcessResu
     student: draft.student as StudentData,
     request: draft.request as RequestData,
     academic: draft.academic as AcademicIndicators,
+    visualFacts: draft.visualFacts as DraftCase['visualFacts'],
     evidencias: evidenceDrafts.map(ev => ({
       id: ev.id,
       file: new File([ev.file.buffer], ev.file.originalname, { type: ev.file.mimetype }),
       nombreArchivo: ev.nombreArchivo,
       tipo: ev.tipo,
       fuente: ev.fuente,
+      tipoEvidencia: classifyEvidence(ev, results[evidenceDrafts.indexOf(ev) as number] || null),
       estado: ev.estado,
       extraccion: ev.extraccion,
       error: ev.error,
@@ -321,12 +371,41 @@ export async function processEvidences(files: MulterFile[]): Promise<ProcessResu
       nombreArchivo: ev.nombreArchivo,
       success: ev.estado === 'COMPLETADO',
       error: ev.error,
+      tipoEvidencia: classifyEvidence(ev, results[evidenceDrafts.indexOf(ev) as number] || null),
       extractedFields: {
         ...(ev.extraccion?.hechos?.reduce((acc, h) => ({ ...acc, [h.tipo]: h.valor }), {}) || {}),
       },
     })),
     usage: usage.summary(),
   };
+}
+
+/**
+ * Fase 2 — Clasificación automática del tipo de evidencia.
+ * Combina la clasificación declarada por visión (tipo_evidencia) con
+ * heurísticas de nombre de archivo y hechos visuales detectados.
+ */
+function classifyEvidence(ev: InternalEvidenceDraft, result: ValidatedExtractionResult | null): EvidenceClassification {
+  const aiTipo = (result?.tipo_evidencia?.valor as EvidenceClassification | undefined) ?? null;
+  const validTypes: EvidenceClassification[] = [
+    'AULA_PERFIL_USUARIO', 'AULA_BITACORAS', 'AULA_CALIFICACIONES', 'SIU_DASHBOARD',
+    'SIU_DATOS_PERSONALES', 'I6_CONTACTO', 'WHATSAPP', 'CORREO', 'OTRO', 'DESCONOCIDA',
+  ];
+  if (aiTipo && validTypes.includes(aiTipo)) return aiTipo;
+
+  const lower = ev.nombreArchivo.toLowerCase();
+  if (lower.includes('siu')) return 'SIU_DASHBOARD';
+  if (lower.includes('i6') || lower.includes('llamada') || lower.includes('contacto')) return 'I6_CONTACTO';
+  if (lower.includes('whatsapp') || lower.includes('wa_')) return 'WHATSAPP';
+  if (lower.includes('correo') || lower.includes('email') || lower.includes('mail')) return 'CORREO';
+  if (lower.includes('aula') || lower.includes('virtual') || lower.includes('moodle')) return 'AULA_BITACORAS';
+
+  const facts = result?.visual_facts;
+  const aulaVals = Object.values(facts?.aula_virtual || {}).map(f => f?.valor).filter(v => v !== null && v !== undefined);
+  const siuVals = Object.values(facts?.siu || {}).map(f => f?.valor).filter(v => v !== null && v !== undefined);
+  if (aulaVals.length > 0) return 'AULA_BITACORAS';
+  if (siuVals.length > 0) return 'SIU_DASHBOARD';
+  return 'DESCONOCIDA';
 }
 
 function inferSource(filename: string, mimeType: string): string {

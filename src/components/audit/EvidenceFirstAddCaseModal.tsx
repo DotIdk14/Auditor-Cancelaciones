@@ -37,13 +37,14 @@ import {
   FieldConfidence,
   ConflictItem,
 } from '../../lib/extraction/types';
+import { buildDictamenText } from '../../lib/dictamen/templates';
 
 const VALID_EDUCATION_LEVELS: EducationLevel[] = ['LICENCIATURA', 'POSGRADO', 'EJECUTIVA', 'ALIANZA', 'UNKNOWN'];
 
 interface EvidenceFirstAddCaseModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddCase: (newCase: AuditCase) => void;
+  onAddCase: (newCase: AuditCase, files?: File[]) => void;
 }
 
 type WizardStep = 'upload' | 'processing' | 'review' | 'creating';
@@ -112,26 +113,66 @@ const FIELD_GROUPS = [
   },
 ];
 
+const FIELD_ALIASES: Record<string, string> = {
+  fechaInicio: 'fecha_inicio',
+  fechaSolicitud: 'fecha_solicitud',
+  contactoEfectivo: 'contacto_efectivo',
+  ingresoAula: 'ingreso_aula',
+  materiasCargadas: 'materias_cargadas',
+  fallaCargaMaterias: 'falla_carga_materias',
+  erroresOperativos: 'errores_operativos',
+  erroresFinancieros: 'errores_financieros',
+  errorInscripcion: 'error_inscripcion',
+  promesaVenta: 'promesa_venta',
+  retencionRealizada: 'retencion_realizada',
+  retencionAceptada: 'retencion_aceptada',
+  intencionCancelacionManifiesta: 'intencion_cancelacion_manifiesta',
+};
+
 function formatDateForInput(dateStr: string | null): string {
   if (!dateStr) return '';
-  const parts = dateStr.split('-');
-  if (parts.length === 3) return `${parts[0]}-${parts[1]}-${parts[2]}`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+  const slashParts = dateStr.split('/');
+  if (slashParts.length === 3) {
+    const [day, month, year] = slashParts;
+    if (year?.length === 4) return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+  const parsed = new Date(dateStr);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().split('T')[0];
   return dateStr;
 }
 
+function formatDateForDisplay(dateStr: string): string {
+  const inputDate = formatDateForInput(dateStr);
+  return inputDate ? inputDate.split('-').reverse().join('/') : 'Sin fecha';
+}
+
+function getSource(draft: DraftCase, groupId: string): Record<string, ExtractedField> | null {
+  return (groupId === 'student' ? draft.student : groupId === 'request' ? draft.request : draft.academic) as any;
+}
+
 function getFieldValue(draft: DraftCase, groupId: string, fieldKey: string): ExtractedField | null {
-  const source = groupId === 'student' ? draft.student : groupId === 'request' ? draft.request : draft.academic;
-  return source?.[fieldKey as keyof typeof source] || null;
+  const source = getSource(draft, groupId);
+  return source?.[fieldKey] || source?.[FIELD_ALIASES[fieldKey]] || null;
 }
 
 function setFieldValue(draft: DraftCase, groupId: string, fieldKey: string, value: any): DraftCase {
   const newDraft = JSON.parse(JSON.stringify(draft));
-  const source = groupId === 'student' ? newDraft.student : groupId === 'request' ? newDraft.request : newDraft.academic;
-  if (source && source[fieldKey]) {
-    source[fieldKey] = { ...source[fieldKey], valor: value, confianza: 'ALTA' as FieldConfidence };
+  const source = getSource(newDraft, groupId);
+  if (source) {
+    const targetKey = source[fieldKey] ? fieldKey : FIELD_ALIASES[fieldKey] && source[FIELD_ALIASES[fieldKey]] ? FIELD_ALIASES[fieldKey] : fieldKey;
+    source[targetKey] = {
+      ...(source[targetKey] || { evidenciaId: null }),
+      valor: value,
+      confianza: 'ALTA' as FieldConfidence,
+    };
   }
   newDraft.completitud = calculateCompletitud(newDraft);
   return newDraft;
+}
+
+function getDraftValue(draft: DraftCase, groupId: string, fieldKey: string): any {
+  return getFieldValue(draft, groupId, fieldKey)?.valor ?? null;
 }
 
 function calculateCompletitud(draft: DraftCase): number {
@@ -146,16 +187,7 @@ function calculateCompletitud(draft: DraftCase): number {
 }
 
 function hasRequiredFields(draft: DraftCase): boolean {
-  const required = [
-    draft.student?.folio?.valor,
-    draft.student?.matricula?.valor,
-    draft.student?.nombre?.valor,
-    draft.student?.programa?.valor,
-    draft.request?.fechaInicio?.valor,
-    draft.request?.fechaSolicitud?.valor,
-    draft.request?.motivo?.valor,
-  ];
-  return required.every(v => v !== null && v !== '');
+  return Boolean(draft);
 }
 
 export const EvidenceFirstAddCaseModal: React.FC<EvidenceFirstAddCaseModalProps> = ({
@@ -257,7 +289,7 @@ export const EvidenceFirstAddCaseModal: React.FC<EvidenceFirstAddCaseModalProps>
 
   const createCase = useCallback(async () => {
     if (!draft || !hasRequiredFields(draft)) {
-      setError('Faltan campos obligatorios: folio, matrícula, nombre, programa, fechas y motivo');
+      setError('No hay un borrador de caso para crear. Primero procesa al menos una evidencia.');
       return;
     }
 
@@ -298,7 +330,7 @@ export const EvidenceFirstAddCaseModal: React.FC<EvidenceFirstAddCaseModalProps>
       };
 
       const newCase = buildAuditCase(draft, evidenceResults, engineResult);
-      onAddCase(newCase);
+      onAddCase(newCase, files);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error creando caso');
@@ -307,13 +339,18 @@ export const EvidenceFirstAddCaseModal: React.FC<EvidenceFirstAddCaseModalProps>
     }
   }, [draft, evidenceResults, onAddCase, onClose]);
 
-  const buildAuditCase = (draft: DraftCase, evidenceResults: any[], engineResult: any): AuditCase => {
-    const student = draft.student;
-    const request = draft.request;
-    const academic = draft.academic;
+  function vfValue(draft: DraftCase, section: 'aulaVirtual' | 'siu' | 'contacto', key: string): any {
+  const field = (draft.visualFacts as any)?.[section]?.[key];
+  const value = field?.valor;
+  if (value !== null && value !== undefined && value !== '') return value;
+  return null;
+}
 
-    const startDate = request.fechaInicio?.valor || '';
-    const requestDate = request.fechaSolicitud?.valor || '';
+const buildAuditCase = (draft: DraftCase, evidenceResults: any[], engineResult: any): AuditCase => {
+    const student = draft.student;
+
+    const startDate = formatDateForInput(getDraftValue(draft, 'request', 'fechaInicio') || '');
+    const requestDate = formatDateForInput(getDraftValue(draft, 'request', 'fechaSolicitud') || '');
 
     let daysDiff = 0;
     if (startDate && requestDate) {
@@ -323,11 +360,23 @@ export const EvidenceFirstAddCaseModal: React.FC<EvidenceFirstAddCaseModalProps>
       daysDiff = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     }
 
-    const formattedStartDate = startDate.split('-').reverse().join('/');
-    const formattedRequestDate = requestDate.split('-').reverse().join('/');
+    const formattedStartDate = formatDateForDisplay(startDate);
+    const formattedRequestDate = formatDateForDisplay(requestDate);
 
-    const rawNivel = student.nivel?.valor;
+    const rawNivel = getDraftValue(draft, 'student', 'nivel');
     const validNivel: EducationLevel = VALID_EDUCATION_LEVELS.includes(rawNivel as EducationLevel) ? (rawNivel as EducationLevel) : 'LICENCIATURA';
+
+    const vfIngresoAula = vfValue(draft, 'aulaVirtual', 'ingresoAula');
+    const vfUltimoAcceso = vfValue(draft, 'aulaVirtual', 'ultimoAccesoCurso');
+    const vfClics = vfValue(draft, 'aulaVirtual', 'clicsDetectados');
+    const vfActividades = vfValue(draft, 'aulaVirtual', 'actividadesEntregadas');
+    const vfCalificacion = vfValue(draft, 'aulaVirtual', 'calificacion');
+    const vfMaterias = vfValue(draft, 'aulaVirtual', 'materiasCargadas');
+    const vfSeleccionModalidad = vfValue(draft, 'aulaVirtual', 'seleccionModalidad');
+    const vfCalificacionesSiu = vfValue(draft, 'siu', 'calificacionesRegistradas');
+    const vfEstatus = vfValue(draft, 'siu', 'estatusAlumno');
+    const vfTelefono = vfValue(draft, 'contacto', 'telefonoRegistrado') || vfValue(draft, 'siu', 'telefono');
+    const hayAccesoVisual = Boolean(vfIngresoAula) || Boolean(vfUltimoAcceso) || (Number(vfClics) > 0) || (Number(vfActividades) > 0);
 
     const decisionData: CaseDecisionData = {
       fechaInicio: startDate,
@@ -335,33 +384,38 @@ export const EvidenceFirstAddCaseModal: React.FC<EvidenceFirstAddCaseModalProps>
       diasHabilesDesdeInicio: Math.max(0, Math.min(daysDiff, 10)),
       semanasDesdeInicio: Math.max(0, Math.ceil(daysDiff / 7)),
       nivelEducativo: validNivel,
-      programa: student.programa?.valor || '',
-      estatusAlumno: 'En proceso de auditoría',
-      canalVenta: student.canal?.valor || 'DIGITAL_FACEBOOK_ADS',
-      contactoEfectivo: academic.contactoEfectivo?.valor ?? true,
-      llamadas: academic.llamadas?.valor || 0,
-      llamadasValidasPorHorario: (academic.llamadas?.valor || 0) >= 15,
-      interaccionesEscritas: academic.mensajes?.valor || 0,
-      ingresoAula: academic.ingresoAula?.valor ?? true,
-      ingresoAulaValidoPosgrado: (academic.ingresoAula?.valor ?? true) && !(academic.fallaCargaMaterias?.valor ?? false),
-      seleccionModalidad: false,
-      calificaciones: academic.calificaciones?.valor ?? false,
-      materiasCargadas: academic.materiasCargadas?.valor ?? false,
-      fallaCargaMaterias: academic.fallaCargaMaterias?.valor ?? false,
-      erroresAdministrativos: academic.erroresOperativos?.valor ?? false,
-      erroresFinancieros: academic.erroresFinancieros?.valor ?? false,
-      errorInscripcion: academic.errorInscripcion?.valor ?? false,
-      promesaVenta: academic.promesaVenta?.valor ?? false,
-      promesaVentaEvidencia: academic.promesaVenta?.valor ? 'Grabación de cierre de venta cotejada por calidad' : undefined,
-      solicitudAjuste: academic.fallaCargaMaterias?.valor ?? false,
+      programa: getDraftValue(draft, 'student', 'programa') || '',
+      estatusAlumno: vfEstatus || 'En proceso de auditoría',
+      canalVenta: getDraftValue(draft, 'student', 'canal') || 'DIGITAL_FACEBOOK_ADS',
+      contactoEfectivo: getDraftValue(draft, 'academic', 'contactoEfectivo') ?? true,
+      llamadas: getDraftValue(draft, 'academic', 'llamadas') || 0,
+      llamadasValidasPorHorario: (getDraftValue(draft, 'academic', 'llamadas') || 0) >= 15,
+      interaccionesEscritas: getDraftValue(draft, 'academic', 'mensajes') || 0,
+      ingresoAula: hayAccesoVisual ? true : (getDraftValue(draft, 'academic', 'ingresoAula') ?? false),
+      ingresoAulaValidoPosgrado: hayAccesoVisual ? true : (getDraftValue(draft, 'academic', 'ingresoAula') ?? false) && !(getDraftValue(draft, 'academic', 'fallaCargaMaterias') ?? false),
+      seleccionModalidad: vfSeleccionModalidad !== null ? Boolean(vfSeleccionModalidad) : false,
+      ultimoAccesoCurso: vfUltimoAcceso || undefined,
+      clicsDetectados: vfClics !== null ? Number(vfClics) : undefined,
+      cantidadActividadesEntregadas: vfActividades !== null ? Number(vfActividades) : undefined,
+      calificacionVisible: vfCalificacion !== null ? Number(vfCalificacion) : undefined,
+      actividadesEntregadas: (Number(vfActividades) > 0) || false,
+      calificaciones: Boolean(vfCalificacionesSiu) || (vfCalificacion !== null && vfCalificacion !== undefined) ? true : (getDraftValue(draft, 'academic', 'calificaciones') ?? false),
+      materiasCargadas: vfMaterias !== null ? Boolean(vfMaterias) : (getDraftValue(draft, 'academic', 'materiasCargadas') ?? false),
+      fallaCargaMaterias: getDraftValue(draft, 'academic', 'fallaCargaMaterias') ?? false,
+      erroresAdministrativos: getDraftValue(draft, 'academic', 'erroresOperativos') ?? false,
+      erroresFinancieros: getDraftValue(draft, 'academic', 'erroresFinancieros') ?? false,
+      errorInscripcion: getDraftValue(draft, 'academic', 'errorInscripcion') ?? false,
+      promesaVenta: getDraftValue(draft, 'academic', 'promesaVenta') ?? false,
+      promesaVentaEvidencia: getDraftValue(draft, 'academic', 'promesaVenta') ? 'Grabación de cierre de venta cotejada por calidad' : undefined,
+      solicitudAjuste: getDraftValue(draft, 'academic', 'fallaCargaMaterias') ?? false,
       ajusteDentroDe20Dias: true,
       ajusteRealizado: false,
-      contactoConExitoEstudiantil: academic.contactoEfectivo?.valor ?? true,
+      contactoConExitoEstudiantil: getDraftValue(draft, 'academic', 'contactoEfectivo') ?? true,
       areaOperativaCanalizoAExito: true,
-      retencionRealizada: academic.retencionRealizada?.valor ?? true,
-      retencionAceptada: academic.retencionAceptada?.valor ?? false,
-      motivoSolicitud: request.motivo?.valor || '',
-      intencionCancelacionManifiesta: academic.intencionCancelacionManifiesta?.valor ?? true,
+      retencionRealizada: getDraftValue(draft, 'academic', 'retencionRealizada') ?? true,
+      retencionAceptada: getDraftValue(draft, 'academic', 'retencionAceptada') ?? false,
+      motivoSolicitud: getDraftValue(draft, 'request', 'motivo') || '',
+      intencionCancelacionManifiesta: getDraftValue(draft, 'academic', 'intencionCancelacionManifiesta') ?? true,
     };
 
     const evidences: EvidenceItem[] = evidenceResults.map((er, idx) => ({
@@ -382,22 +436,26 @@ export const EvidenceFirstAddCaseModal: React.FC<EvidenceFirstAddCaseModalProps>
       previewData: {},
     }));
 
+    const folio = getDraftValue(draft, 'student', 'folio') || `CAVE-${Math.floor(30300 + Math.random() * 900)}`;
+    const studentName = getDraftValue(draft, 'student', 'nombre') || 'Alumno sin nombre';
+    const matricula = getDraftValue(draft, 'student', 'matricula') || 'Sin matricula';
+
     return {
-      id: student.folio?.valor || `CAVE-${Math.floor(30300 + Math.random() * 900)}`,
+      id: folio,
       status: engineResult.status === 'APROBADO' ? 'DICTAMINADO' : 'PENDIENTE_REVISION',
       statusLabel: engineResult.status === 'APROBADO' ? 'Dictaminado' : 'Pendiente revisión',
-      matricula: student.matricula?.valor || '',
-      studentName: student.nombre?.valor || '',
-      program: student.programa?.valor || '',
+      matricula,
+      studentName,
+      program: getDraftValue(draft, 'student', 'programa') || 'Programa no especificado',
       level: VALID_EDUCATION_LEVELS.includes(student.nivel?.valor as EducationLevel) ? (student.nivel?.valor as EducationLevel) : 'LICENCIATURA',
-      channel: student.canal?.valor || 'DIGITAL_FACEBOOK_ADS',
+      channel: getDraftValue(draft, 'student', 'canal') || 'DIGITAL_FACEBOOK_ADS',
       startDate: formattedStartDate,
       requestDate: formattedRequestDate,
       daysFromStart: daysDiff,
       workingDaysFromStart: Math.max(1, Math.min(daysDiff, 10)),
       requestedPolicy: engineResult.classificationName || 'Cancelación de Venta',
-      requestReason: request.motivo?.valor || '',
-      studentContactNumber: student.telefono?.valor || '',
+      requestReason: getDraftValue(draft, 'request', 'motivo') || 'Motivo pendiente de documentar',
+      studentContactNumber: getDraftValue(draft, 'student', 'telefono') || '',
       campaign: 'AUDITORIA_EVIDENCIA_PRIMERA',
       primaryCall: {
         id: `CALL-${Date.now()}`,
@@ -408,7 +466,7 @@ export const EvidenceFirstAddCaseModal: React.FC<EvidenceFirstAddCaseModalProps>
         time: '12:00 h',
         status: 'EN_PROCESO',
         campaign: 'AUDITORIA_EVIDENCIA_PRIMERA',
-        phoneNumber: student.telefono?.valor || 'Desconocido',
+        phoneNumber: getDraftValue(draft, 'student', 'telefono') || 'Desconocido',
         intentsRatio: 'N/A',
         sentiment: 'Neutro',
         detectedIntentions: [],
@@ -437,11 +495,23 @@ export const EvidenceFirstAddCaseModal: React.FC<EvidenceFirstAddCaseModalProps>
         classification: engineResult.classification,
         confidence: engineResult.confidence,
         rootCause: engineResult.rootCause,
-        text: engineResult.dictamenSugerido || '',
+        text: buildDictamenText({
+          folio,
+          estudiante: studentName,
+          matricula,
+          clasificacion: engineResult.classification,
+          causaRaiz: engineResult.rootCause,
+          fechaInicio: startDate || undefined,
+          fechaSolicitud: requestDate || undefined,
+          confianza: engineResult.confidence,
+          motivo: getDraftValue(draft, 'request', 'motivo'),
+          evidencias: evidenceResults.map(er => ({ tipo: er.tipoEvidencia || 'OTRO', descripcion: er.nombreArchivo })),
+        }),
         status: engineResult.status === 'APROBADO' ? 'APROBADO' : 'PENDIENTE_REVISION',
         modifiedByAuditor: false,
       },
       decisionData,
+      visualFacts: draft.visualFacts,
     };
   };
 
@@ -744,7 +814,7 @@ export const EvidenceFirstAddCaseModal: React.FC<EvidenceFirstAddCaseModalProps>
           </button>
           <button
             onClick={createCase}
-            disabled={creating || !hasRequiredFields(draft)}
+            disabled={creating || !draft}
             className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-900/30 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
           >
             {creating ? (

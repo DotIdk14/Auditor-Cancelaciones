@@ -14,7 +14,7 @@ import { EvidenceItem, EvidenceSource } from '../../types/audit';
 interface AttachEvidenceModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddEvidence: (newEvidence: EvidenceItem) => void;
+  onAddEvidence: (newEvidence: EvidenceItem, file?: File | null) => void;
   currentCaseId: string;
 }
 
@@ -120,7 +120,7 @@ export const AttachEvidenceModal: React.FC<AttachEvidenceModalProps> = ({
       }
     };
 
-    onAddEvidence(newEvidence);
+    onAddEvidence(newEvidence, selectedFile);
     onClose();
   };
 

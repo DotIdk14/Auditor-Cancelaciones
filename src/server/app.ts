@@ -3,9 +3,12 @@ import multer from 'multer';
 import { analyzeCancellationCase, CaseDecisionData } from '../lib/decision-engine/decision-engine.js';
 import { DecisionResult } from '../lib/decision-engine/types.js';
 import { processEvidences } from '../lib/extraction/extraction-service.js';
+import { persistRouter } from './persist.js';
 
 export const app = express();
 app.use(express.json({ limit: '10mb' }));
+
+app.use('/api/persist', persistRouter);
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -287,9 +290,25 @@ function draftToDecisionData(draft: any): CaseDecisionData {
   const student = draft.student || {};
   const request = draft.request || {};
   const academic = draft.academic || {};
+  const visual = draft.visualFacts || {};
 
-  const startDate = student.fecha_inicio?.valor || request.fecha_inicio?.valor || '';
-  const requestDate = student.fecha_solicitud?.valor || request.fecha_solicitud?.valor || '';
+  const fieldValue = (source: any, ...keys: string[]) => {
+    for (const key of keys) {
+      const value = source[key]?.valor;
+      if (value !== null && value !== undefined && value !== '') return value;
+    }
+    return null;
+  };
+
+  const vfValue = (section: string, key: string) => {
+    const field = visual[section]?.[key];
+    const value = field?.valor;
+    if (value !== null && value !== undefined && value !== '') return value;
+    return null;
+  };
+
+  const startDate = fieldValue(request, 'fechaInicio', 'fecha_inicio') || fieldValue(student, 'fechaInicio', 'fecha_inicio') || vfValue('siu', 'fechaInicio') || '';
+  const requestDate = fieldValue(request, 'fechaSolicitud', 'fecha_solicitud') || fieldValue(student, 'fechaSolicitud', 'fecha_solicitud') || '';
 
   let daysDiff = 0;
   if (startDate && requestDate) {
@@ -299,6 +318,22 @@ function draftToDecisionData(draft: any): CaseDecisionData {
     daysDiff = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   }
 
+  // Fase 1/4 — hechos visuales de plataforma (capturas Aula Virtual / SIU).
+  // Solo tienen peso cuando la captura muestra el dato; de lo contrario se
+  // conserva el valor del formulario/extracción de texto.
+  const vfIngresoAula = vfValue('aulaVirtual', 'ingresoAula');
+  const vfUltimoAcceso = vfValue('aulaVirtual', 'ultimoAccesoCurso');
+  const vfClics = vfValue('aulaVirtual', 'clicsDetectados');
+  const vfActividades = vfValue('aulaVirtual', 'actividadesEntregadas');
+  const vfCalificacion = vfValue('aulaVirtual', 'calificacion');
+  const vfMaterias = vfValue('aulaVirtual', 'materiasCargadas');
+  const vfSeleccionModalidad = vfValue('aulaVirtual', 'seleccionModalidad');
+  const vfCalificacionesSiu = vfValue('siu', 'calificacionesRegistradas');
+  const vfEstatus = vfValue('siu', 'estatusAlumno');
+  const vfTelefono = vfValue('contacto', 'telefonoRegistrado') || vfValue('siu', 'telefono');
+
+  const hayAccesoVisual = Boolean(vfIngresoAula) || Boolean(vfUltimoAcceso) || (Number(vfClics) > 0) || (Number(vfActividades) > 0);
+
   return {
     fechaInicio: startDate,
     fechaSolicitud: requestDate,
@@ -306,32 +341,37 @@ function draftToDecisionData(draft: any): CaseDecisionData {
     semanasDesdeInicio: Math.max(0, Math.ceil(daysDiff / 7)),
     nivelEducativo: student.nivel?.valor || 'LICENCIATURA',
     programa: student.programa?.valor || '',
-    estatusAlumno: 'En proceso de auditoría',
+    estatusAlumno: vfEstatus || 'En proceso de auditoría',
     canalVenta: student.canal?.valor || 'DIGITAL_FACEBOOK_ADS',
-    contactoEfectivo: academic.contacto_efectivo?.valor ?? true,
-    llamadas: academic.llamadas?.valor || 0,
-    llamadasValidasPorHorario: (academic.llamadas?.valor || 0) >= 15,
-    interaccionesEscritas: academic.mensajes?.valor || 0,
-    ingresoAula: academic.ingreso_aula?.valor ?? true,
-    ingresoAulaValidoPosgrado: (academic.ingreso_aula?.valor ?? true) && !(academic.falla_carga_materias?.valor ?? false),
-    seleccionModalidad: false,
-    calificaciones: academic.calificaciones?.valor ?? false,
-    materiasCargadas: academic.materias_cargadas?.valor ?? false,
-    fallaCargaMaterias: academic.falla_carga_materias?.valor ?? false,
-    erroresAdministrativos: academic.errores_operativos?.valor ?? false,
-    erroresFinancieros: academic.errores_financieros?.valor ?? false,
-    errorInscripcion: academic.error_inscripcion?.valor ?? false,
-    promesaVenta: academic.promesa_venta?.valor ?? false,
-    promesaVentaEvidencia: academic.promesa_venta?.valor ? 'Grabación de cierre de venta cotejada por calidad' : undefined,
-    solicitudAjuste: academic.falla_carga_materias?.valor ?? false,
+    contactoEfectivo: fieldValue(academic, 'contactoEfectivo', 'contacto_efectivo') ?? true,
+    llamadas: fieldValue(academic, 'llamadas') || 0,
+    llamadasValidasPorHorario: (fieldValue(academic, 'llamadas') || 0) >= 15,
+    interaccionesEscritas: fieldValue(academic, 'mensajes') || 0,
+    ingresoAula: hayAccesoVisual ? true : (fieldValue(academic, 'ingresoAula', 'ingreso_aula') ?? false),
+    ingresoAulaValidoPosgrado: hayAccesoVisual ? true : (fieldValue(academic, 'ingresoAula', 'ingreso_aula') ?? false) && !(fieldValue(academic, 'fallaCargaMaterias', 'falla_carga_materias') ?? false),
+    seleccionModalidad: vfSeleccionModalidad !== null ? Boolean(vfSeleccionModalidad) : false,
+    ultimoAccesoCurso: vfUltimoAcceso || undefined,
+    clicsDetectados: vfClics !== null ? Number(vfClics) : undefined,
+    cantidadActividadesEntregadas: vfActividades !== null ? Number(vfActividades) : undefined,
+    calificacionVisible: vfCalificacion !== null ? Number(vfCalificacion) : undefined,
+    actividadesEntregadas: (Number(vfActividades) > 0) || false,
+    calificaciones: Boolean(vfCalificacionesSiu) || (vfCalificacion !== null && vfCalificacion !== undefined) ? true : (fieldValue(academic, 'calificaciones') ?? false),
+    materiasCargadas: vfMaterias !== null ? Boolean(vfMaterias) : (fieldValue(academic, 'materiasCargadas', 'materias_cargadas') ?? false),
+    fallaCargaMaterias: fieldValue(academic, 'fallaCargaMaterias', 'falla_carga_materias') ?? false,
+    erroresAdministrativos: fieldValue(academic, 'erroresOperativos', 'errores_operativos') ?? false,
+    erroresFinancieros: fieldValue(academic, 'erroresFinancieros', 'errores_financieros') ?? false,
+    errorInscripcion: fieldValue(academic, 'errorInscripcion', 'error_inscripcion') ?? false,
+    promesaVenta: fieldValue(academic, 'promesaVenta', 'promesa_venta') ?? false,
+    promesaVentaEvidencia: fieldValue(academic, 'promesaVenta', 'promesa_venta') ? 'Grabación de cierre de venta cotejada por calidad' : undefined,
+    solicitudAjuste: fieldValue(academic, 'fallaCargaMaterias', 'falla_carga_materias') ?? false,
     ajusteDentroDe20Dias: true,
     ajusteRealizado: false,
-    contactoConExitoEstudiantil: academic.contacto_efectivo?.valor ?? true,
+    contactoConExitoEstudiantil: fieldValue(academic, 'contactoEfectivo', 'contacto_efectivo') ?? true,
     areaOperativaCanalizoAExito: true,
-    retencionRealizada: academic.retencion_realizada?.valor ?? true,
-    retencionAceptada: academic.retencion_aceptada?.valor ?? false,
-    motivoSolicitud: request.motivo?.valor || student.motivo?.valor || '',
-    intencionCancelacionManifiesta: academic.intencion_cancelacion_manifiesta?.valor ?? true,
+    retencionRealizada: fieldValue(academic, 'retencionRealizada', 'retencion_realizada') ?? true,
+    retencionAceptada: fieldValue(academic, 'retencionAceptada', 'retencion_aceptada') ?? false,
+    motivoSolicitud: fieldValue(request, 'motivo') || fieldValue(student, 'motivo') || '',
+    intencionCancelacionManifiesta: fieldValue(academic, 'intencionCancelacionManifiesta', 'intencion_cancelacion_manifiesta') ?? true,
   };
 }
 

@@ -111,8 +111,33 @@ export async function extractStructuredFromText(input: StructuredEvidenceInput, 
   return { result: applyDeterministicFields(input, fallbackParsed.data), fallbackUsed: true };
 }
 
+const VISUAL_FACT_LABELS: Record<string, string> = {
+  'aula_virtual.ingreso_aula': 'AULA_INGRESO',
+  'aula_virtual.ultimo_acceso_curso': 'AULA_ULTIMO_ACCESO',
+  'aula_virtual.hora_acceso': 'AULA_HORA_ACCESO',
+  'aula_virtual.curso': 'AULA_CURSO',
+  'aula_virtual.grupo': 'AULA_GRUPO',
+  'aula_virtual.calificacion': 'AULA_CALIFICACION',
+  'aula_virtual.actividades_entregadas': 'AULA_ACTIVIDADES_ENTREGADAS',
+  'aula_virtual.clics_detectados': 'AULA_CLICS_DETECTADOS',
+  'aula_virtual.materias_cargadas': 'AULA_MATERIAS_CARGADAS',
+  'aula_virtual.seleccion_modalidad': 'AULA_SELECCION_MODALIDAD',
+  'siu.estatus_alumno': 'SIU_ESTATUS',
+  'siu.ultima_sesion': 'SIU_ULTIMA_SESION',
+  'siu.fecha_inicio': 'SIU_FECHA_INICIO',
+  'siu.primer_pago': 'SIU_PRIMER_PAGO',
+  'siu.proximo_pago_monto': 'SIU_PROXIMO_PAGO_MONTO',
+  'siu.telefono': 'SIU_TELEFONO',
+  'siu.correo': 'SIU_CORREO',
+  'siu.calificaciones_registradas': 'SIU_CALIFICACIONES',
+  'contacto.telefono_registrado': 'CONTACTO_TELEFONO',
+  'contacto.correo_registrado': 'CONTACTO_CORREO',
+  'contacto.medio': 'CONTACTO_MEDIO',
+  'contacto.ultima_interaccion': 'CONTACTO_ULTIMA_INTERACCION',
+};
+
 export function normalizeFacts(result: ValidatedExtractionResult, defaultEvidenceId: string): ExtractedFact[] {
-  return result.hechos.map((h, index) => ({
+  const facts: ExtractedFact[] = result.hechos.map((h, index) => ({
     id: h.id || `fact-${defaultEvidenceId}-${index + 1}`,
     tipo: h.tipo,
     valor: h.valor === null ? '' : String(h.valor),
@@ -122,4 +147,30 @@ export function normalizeFacts(result: ValidatedExtractionResult, defaultEvidenc
     timestamp: h.timestamp ?? undefined,
     textoCitado: h.textoCitado || h.texto_citado || undefined,
   }));
+
+  // Fase 1 — hecho visual adicional cuando la captura muestra valor en plataforma
+  const vf = result.visual_facts;
+  if (vf) {
+    let index = facts.length;
+    for (const [section, entries] of Object.entries(vf) as [string, Record<string, any>][]) {
+      for (const [key, field] of Object.entries(entries || {})) {
+        const valor = field?.valor;
+        if (valor === null || valor === undefined || valor === '') continue;
+        if (field?.confianza === 'BAJA') continue;
+        facts.push({
+          id: `fact-visual-${defaultEvidenceId}-${index + 1}`,
+          tipo: VISUAL_FACT_LABELS[`${section}.${key}`] || `${section}_${key}`.toUpperCase(),
+          valor: typeof valor === 'boolean' ? (valor ? 'Sí' : 'No') : String(valor),
+          confianza: field.confianza,
+          evidenciaId: defaultEvidenceId,
+          pagina: field.pagina ?? undefined,
+          timestamp: field.timestamp ?? undefined,
+          textoCitado: field.texto_citado || field.textoCitado || undefined,
+        });
+        index += 1;
+      }
+    }
+  }
+
+  return facts;
 }

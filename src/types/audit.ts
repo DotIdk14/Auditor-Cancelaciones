@@ -63,8 +63,36 @@ export interface DictamenData {
   reviewerNotes?: string;
 }
 
+export interface ManualOverrides {
+  correo?: string;
+  telefono?: string;
+  fechaCreacion?: string;
+  fechaDecision?: string;
+  fechaAsignadoDictaminar?: string;
+  ultimaSesion?: string;
+  primerPago?: boolean;
+  linkEvidencias?: string;
+  comentariosBackOffice?: string;
+  comentariosHelpDesk?: string;
+  comentariosSER?: string;
+  comentariosFinanzas?: string;
+  observacionesFinales?: string;
+}
+
+/** Fase 12 — versión de PDF emitida para un caso. */
+export interface PdfEmission {
+  version: number;
+  fileName: string;
+  sha256: string;
+  generatedAt: string;
+  sizeBytes: number;
+  id?: string;
+}
+
 export interface AuditCase {
   id: string;
+  /** Fase 12 — ID del registro en el backend (InsForge); llenado al sincronizar. */
+  backendId?: string;
   status: CaseStatus;
   statusLabel: string;
   matricula: string;
@@ -86,4 +114,9 @@ export interface AuditCase {
   timeline: TimelineEvent[];
   dictamen: DictamenData;
   decisionData: import('../lib/decision-engine/types').CaseDecisionData;
+  manualOverrides?: ManualOverrides;
+  /** Fase 12 — historial de PDFs emitidos (versionado). */
+  pdfsEmitidos?: PdfEmission[];
+  /** Fase 1/8 — hechos visuales detectados en capturas Aula Virtual / SIU. */
+  visualFacts?: import('../lib/extraction/types').VisualFacts;
 }

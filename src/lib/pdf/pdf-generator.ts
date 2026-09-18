@@ -1,5 +1,5 @@
 import { PDFDocument, PDFImage, PDFPage, PDFFont, StandardFonts, rgb } from 'pdf-lib';
-import { AuditCase, EvidenceItem } from '../../types/audit';
+import { AuditCase, EvidenceItem, ManualOverrides } from '../../types/audit';
 import { DecisionResult } from '../../lib/decision-engine/types';
 
 export interface PDFTemplateFields {
@@ -16,6 +16,7 @@ export interface PDFTemplateFields {
   'fechas.fechaSolicitudTicket': string;
   'fechas.fechaAsignadoDictaminar': string;
   'fechas.fechaDictamenAplicado': string;
+  'fechas.ultimaSesion': string;
   'solicitud.primerPago': string;
   'solicitud.politicaSolicitada': string;
   'solicitud.motivo': string;
@@ -26,7 +27,13 @@ export interface PDFTemplateFields {
   'comentarios.finanzas': string;
   'resultado.textoDictamen': string;
   'evidencias.cronologicas': string;
+  'evidencias.link': string;
   'comentarios.auditor': string;
+}
+
+export interface GeneratePDFOptions {
+  dictamenText?: string;
+  manualOverrides?: ManualOverrides;
 }
 
 export interface PDFGenerationResult {
@@ -34,6 +41,7 @@ export interface PDFGenerationResult {
   sha256: string;
   version: number;
   generatedAt: string;
+  sizeBytes: number;
 }
 
 type PdfFonts = {
@@ -178,36 +186,45 @@ function drawValueCell(page: PDFPage, fonts: PdfFonts, value: string, x: number,
   drawTextBox(page, value, x, yTop, width, height, fonts.regular, size, { lineHeight: size + 1.5, padding: 5 });
 }
 
-function extractFieldsFromCase(caseData: AuditCase, decisionResult: DecisionResult | null): PDFTemplateFields {
+function extractFieldsFromCase(caseData: AuditCase, decisionResult: DecisionResult | null, options: GeneratePDFOptions = {}): PDFTemplateFields {
   const dc = caseData.decisionData as unknown as Record<string, unknown>;
-  const dictamenText = decisionResult?.dictamenSugerido || caseData.dictamen?.text || 'De acuerdo a la política y a las evidencias encontradas y compartidas, se determina una Cancelación de Venta';
+  const overrides = options.manualOverrides || {};
+  const dictamenText = options.dictamenText || decisionResult?.dictamenSugerido || caseData.dictamen?.text || 'De acuerdo a la política y a las evidencias encontradas y compartidas, se determina una Cancelación de Venta';
   const appliedAt = decisionResult?.analizadoEn || caseData.dictamen?.approvedAt || new Date().toISOString();
+
+  const orBest = (manual: unknown, source: unknown, fallback = '') => {
+    if (manual !== undefined && manual !== null && String(manual).trim() !== '') return manual;
+    if (source !== undefined && source !== null && String(source).trim() !== '') return source;
+    return fallback;
+  };
 
   return {
     folio: sanitizeText(caseData.id || 'XXX'),
     'estudiante.nombre': sanitizeText(caseData.studentName),
     'estudiante.matricula': sanitizeText(caseData.matricula),
-    'estudiante.correo': sanitizeText(dc.correo, ''),
+    'estudiante.correo': sanitizeText(orBest(overrides.correo, dc.correo), ''),
     'estudiante.canal': sanitizeText(caseData.channel || dc.canalVenta, ''),
     'estudiante.programa': sanitizeText(caseData.program || dc.programa, ''),
-    'estudiante.telefono': sanitizeText(caseData.studentContactNumber, ''),
-    'fechas.fechaCreacion': formatDateTime(dc.fechaCreacion),
-    'fechas.fechaDecision': formatDate(dc.fechaDecision),
+    'estudiante.telefono': sanitizeText(orBest(overrides.telefono, caseData.studentContactNumber), ''),
+    'fechas.fechaCreacion': formatDateTime(orBest(overrides.fechaCreacion, dc.fechaCreacion)),
+    'fechas.fechaDecision': formatDate(orBest(overrides.fechaDecision, dc.fechaDecision)),
     'fechas.fechaInicioCiclo': formatDate(caseData.startDate || dc.fechaInicio),
     'fechas.fechaSolicitudTicket': formatDate(caseData.requestDate || dc.fechaSolicitud),
-    'fechas.fechaAsignadoDictaminar': formatDate(dc.fechaAsignadoDictaminar),
+    'fechas.fechaAsignadoDictaminar': formatDate(orBest(overrides.fechaAsignadoDictaminar, dc.fechaAsignadoDictaminar)),
     'fechas.fechaDictamenAplicado': formatDateTime(appliedAt),
-    'solicitud.primerPago': dc.primerPago ? 'Si' : 'No',
+    'fechas.ultimaSesion': formatDateTime(orBest(overrides.ultimaSesion, dc.ultimaSesion)),
+    'solicitud.primerPago': orBest(overrides.primerPago, dc.primerPago) ? 'Si' : 'No',
     'solicitud.politicaSolicitada': sanitizeText(caseData.requestedPolicy || decisionResult?.classificationName, ''),
     'solicitud.motivo': sanitizeText(caseData.requestReason || dc.motivoSolicitud, ''),
     'solicitud.descripcion': sanitizeText(dc.descripcion, ''),
-    'comentarios.backOffice': sanitizeText(dc.backOffice, ''),
-    'comentarios.helpDesk': sanitizeText(dc.helpDesk, ''),
-    'comentarios.ser': sanitizeText(dc.ser, ''),
-    'comentarios.finanzas': sanitizeText(dc.finanzas, ''),
+    'comentarios.backOffice': sanitizeText(orBest(overrides.comentariosBackOffice, dc.backOffice), ''),
+    'comentarios.helpDesk': sanitizeText(orBest(overrides.comentariosHelpDesk, dc.helpDesk), ''),
+    'comentarios.ser': sanitizeText(orBest(overrides.comentariosSER, dc.ser), ''),
+    'comentarios.finanzas': sanitizeText(orBest(overrides.comentariosFinanzas, dc.finanzas), ''),
     'resultado.textoDictamen': sanitizeText(dictamenText),
     'evidencias.cronologicas': caseData.evidences?.map((e, i) => `${i + 1}. ${e.description || e.name}`).join('\n') || '',
-    'comentarios.auditor': sanitizeText(dc.auditor || caseData.dictamen?.reviewerNotes, ''),
+    'evidencias.link': sanitizeText(overrides.linkEvidencias, ''),
+    'comentarios.auditor': sanitizeText(orBest(overrides.observacionesFinales, caseData.dictamen?.reviewerNotes), ''),
   };
 }
 
@@ -233,7 +250,7 @@ function drawFirstPage(page: PDFPage, fonts: PdfFonts, fields: PDFTemplateFields
     { labels: ['Nombre', 'Matricula', 'Correo'], values: [fields['estudiante.nombre'], fields['estudiante.matricula'], fields['estudiante.correo']], fill: HEADER_GREEN },
     { labels: ['Canal', 'Programa', 'Fecha de creación'], values: [fields['estudiante.canal'], fields['estudiante.programa'], fields['fechas.fechaCreacion']], fill: HEADER_BLUE },
     { labels: ['Fecha Decisión', 'Fecha de inicio de ciclo', 'Fecha solicitud de ticket'], values: [fields['fechas.fechaDecision'], fields['fechas.fechaInicioCiclo'], fields['fechas.fechaSolicitudTicket']], fill: HEADER_BLUE },
-    { labels: ['Asignado a Dictaminar', 'Última sesión', 'Teléfono'], values: [fields['fechas.fechaAsignadoDictaminar'], '', fields['estudiante.telefono']], fill: HEADER_BLUE }
+    { labels: ['Asignado a Dictaminar', 'Última sesión', 'Teléfono'], values: [fields['fechas.fechaAsignadoDictaminar'], fields['fechas.ultimaSesion'], fields['estudiante.telefono']], fill: HEADER_BLUE }
   ];
 
   for (const row of headerRows) {
@@ -329,6 +346,9 @@ function drawHighlightedHeading(page: PDFPage, fonts: PdfFonts, text: string, x:
 function addTextPages(pdfDoc: PDFDocument, fonts: PdfFonts, fields: PDFTemplateFields): void {
   const text = [
     'Se comparten evidencias del caso:',
+    ...(fields['evidencias.link']
+      ? [`Link de evidencias compartidas: ${fields['evidencias.link']}`]
+      : []),
     '------------------- Localizable/activo en AV',
     'la cancelación del ticket para que la alumna continúe con sus estudios con normalidad, ya que sí ha ingresado a su aula, tiene selección de modalidad de evaluación, realizó actividades y ya cuenta con calificación en su materia, por lo que no se considera una alumna ilocalizable para EE y se procede a cerrar el ticket.',
     '—----------------- Ilocalizable',
@@ -441,7 +461,8 @@ function computeSHA256(data: Uint8Array): string {
 
 export async function generateCanonicalPDF(
   caseData: AuditCase,
-  decisionResult: DecisionResult | null
+  decisionResult: DecisionResult | null,
+  options: GeneratePDFOptions = {}
 ): Promise<PDFGenerationResult> {
   const pdfDoc = await PDFDocument.create();
   const fonts: PdfFonts = {
@@ -450,7 +471,7 @@ export async function generateCanonicalPDF(
     italic: await pdfDoc.embedFont(StandardFonts.HelveticaOblique),
     boldItalic: await pdfDoc.embedFont(StandardFonts.HelveticaBoldOblique),
   };
-  const fields = extractFieldsFromCase(caseData, decisionResult);
+  const fields = extractFieldsFromCase(caseData, decisionResult, options);
 
   drawFirstPage(pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]), fonts, fields);
   addTextPages(pdfDoc, fonts, fields);
@@ -463,13 +484,40 @@ export async function generateCanonicalPDF(
   return {
     pdfBytes,
     sha256,
-    version: Date.now(),
+    version: (caseData.pdfsEmitidos?.length || 0) + 1,
     generatedAt: new Date().toISOString(),
+    sizeBytes: pdfBytes.length,
+  };
+}
+
+/** Fase 12 — registra una emisión y devuelve el caso actualizado con versionado. */
+export function recordPdfEmission(
+  caseData: AuditCase,
+  emission: PDFGenerationResult,
+  fileName: string
+): AuditCase {
+  const pdfsEmitidos = caseData.pdfsEmitidos || [];
+  return {
+    ...caseData,
+    pdfsEmitidos: [
+      ...pdfsEmitidos,
+      {
+        version: emission.version,
+        fileName,
+        sha256: emission.sha256,
+        generatedAt: emission.generatedAt,
+        sizeBytes: (emission as PDFGenerationResult & { sizeBytes?: number }).sizeBytes ?? 0,
+      },
+    ],
   };
 }
 
 export function canGeneratePDF(caseData: AuditCase): boolean {
-  return caseData.status === 'DICTAMINADO' || caseData.status === 'APROBADO';
+  if (!caseData?.id) return false;
+  return Boolean(
+    caseData.evidences?.length &&
+    (caseData.dictamen?.text || caseData.status === 'DICTAMINADO' || caseData.status === 'APROBADO')
+  );
 }
 
 export async function validatePDFFormat(generatedBytes: Uint8Array): Promise<boolean> {

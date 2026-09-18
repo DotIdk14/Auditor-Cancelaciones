@@ -7,3 +7,19 @@ coverage/
 .env*
 !.env.example
 .vercel
+
+# InsForge & AI agent skills
+opencode.json
+.insforge
+.agent
+.agents
+.augment
+.claude
+.cline
+.github/copilot*
+.kilocode
+.qoder
+.qwen
+.roo
+.trae
+.windsurf

@@ -14,6 +14,21 @@ export function evaluateAcademicActivity(caseData: CancellationCase): AcademicAc
   let blocksUnreachableCancellation = false;
   let hasAnyRelevantActivity = false;
 
+  // Fase 5 — hecho visual de actividad real en plataforma: si la captura del
+  // aula virtual muestra accesos recientes, clics o calificación, el estudiante
+  // NO es ilocalizable sin importar el nivel educativo.
+  if (acad.clicksDetected) {
+    hasAnyRelevantActivity = true;
+    blocksUnreachableCancellation = true;
+    reasons.push('La bitácora del aula virtual muestra clics registrados del estudiante (actividad en plataforma).');
+  }
+
+  if (acad.recentAccess) {
+    hasAnyRelevantActivity = true;
+    blocksUnreachableCancellation = true;
+    reasons.push('La captura del aula virtual muestra fecha de acceso reciente del estudiante al curso.');
+  }
+
   if (acad.hasGrades) {
     hasAnyRelevantActivity = true;
     blocksUnreachableCancellation = true;

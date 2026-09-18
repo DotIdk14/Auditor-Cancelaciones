@@ -126,10 +126,12 @@ export function normalizeToCancellationCase(input: CancellationCase | CaseDecisi
     academic: {
       enteredVirtualClassroom: d.ingresoAula ?? false,
       selectedEvaluationMethod: d.seleccionModalidad ?? false,
-      hasActivities: d.actividadesEntregadas ?? false,
+      hasActivities: d.actividadesEntregadas ?? (d.cantidadActividadesEntregadas ?? 0) > 0,
       hasGrades: d.calificaciones ?? false,
       enteredAnyActiveSubject: d.ingresoAulaValidoPosgrado ?? d.ingresoAula ?? false,
-      participatedInForum: d.ingresoAulaValidoPosgrado ?? false
+      participatedInForum: d.ingresoAulaValidoPosgrado ?? false,
+      clicksDetected: (d.clicsDetectados ?? 0) > 0,
+      recentAccess: Boolean(d.ultimoAccesoCurso) || d.calificacionVisible !== undefined,
     },
     contacts: {
       calls,

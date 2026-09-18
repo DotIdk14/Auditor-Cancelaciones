@@ -93,6 +93,10 @@ export interface CaseAcademic {
   activeSubjects?: number;
   enteredAnyActiveSubject?: boolean;
   participatedInForum?: boolean;
+  /** Fase 5 — clics detectados en bitácora del aula virtual (hecho visual). */
+  clicksDetected?: boolean;
+  /** Fase 5 — acceso reciente al curso visible en captura (hecho visual). */
+  recentAccess?: boolean;
 }
 
 export interface CaseContacts {
@@ -199,6 +203,14 @@ export interface CaseDecisionData {
   actividadesEntregadas?: boolean;
   calificaciones: boolean;
   calificacionesDetalle?: string;
+  /** Fase 1 — fecha del último acceso al curso visible en Aula Virtual (YYYY-MM-DD). */
+  ultimoAccesoCurso?: string;
+  /** Fase 1 — clics detectados en la bitácora del aula virtual. */
+  clicsDetectados?: number;
+  /** Fase 1 — cantidad de actividades/entregas visibles. */
+  cantidadActividadesEntregadas?: number;
+  /** Fase 1 — calificación numérica visible en la captura (ej. 0.40). */
+  calificacionVisible?: number;
   materiasCargadas: boolean;
   fallaCargaMaterias?: boolean;
   erroresAdministrativos: boolean;
