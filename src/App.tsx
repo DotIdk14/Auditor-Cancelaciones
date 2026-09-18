@@ -369,7 +369,34 @@ const handleSaveDictamenDraft = useCallback((text: string) => {
   }
 
   if (!selectedTicket) {
-    return <main className="min-h-screen bg-zinc-950 text-zinc-100 p-8">Sin tickets disponibles.</main>;
+    return (
+      <main className="min-h-screen bg-zinc-950 text-zinc-100 p-8 flex items-center justify-center">
+        <div className="w-full max-w-xl rounded-3xl border border-zinc-800 bg-zinc-900/70 p-8 text-center shadow-2xl shadow-black/30">
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
+            <FolderOpen className="h-7 w-7" />
+          </div>
+          <h1 className="text-2xl font-black text-white">Aún no hay expedientes</h1>
+          <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+            El backend no tiene tickets guardados todavía. Crea el primer expediente subiendo capturas, PDFs o audios; el sistema extraerá los datos y abrirá el flujo de dictaminación.
+          </p>
+          <button
+            onClick={() => setIsAddCaseOpen(true)}
+            className="mt-7 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-500"
+          >
+            <Plus className="h-4 w-4" />
+            Crear caso desde evidencias
+          </button>
+        </div>
+
+        <EvidenceFirstAddCaseModal
+          isOpen={isAddCaseOpen}
+          onClose={() => {
+            setIsAddCaseOpen(false);
+          }}
+          onAddCase={handleAddCase}
+        />
+      </main>
+    );
   }
 
   const tabs: { id: AuditTab; label: string }[] = [
