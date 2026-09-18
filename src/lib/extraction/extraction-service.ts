@@ -263,6 +263,78 @@ function mergeExtractionResults(results: ValidatedExtractionResult[]): Partial<D
   return merged;
 }
 
+function mergeValidatedExtractionResults(results: ValidatedExtractionResult[]): ValidatedExtractionResult {
+  const source = results.length > 0 ? results : [emptyExtraction()];
+  const pick = (section: 'estudiante' | 'solicitud' | 'indicadores', key: string) => mergeField(source.map(result => (result as any)[section][key])) as any;
+  const pickVisual = (section: 'aula_virtual' | 'siu' | 'contacto', key: string) =>
+    mergeField(source.map(result => (result as any).visual_facts?.[section]?.[key])) as any;
+
+  return {
+    tipo_evidencia: mergeField(source.map(result => result.tipo_evidencia)) as any,
+    estudiante: {
+      folio: pick('estudiante', 'folio'),
+      matricula: pick('estudiante', 'matricula'),
+      nombre: pick('estudiante', 'nombre'),
+      nivel: pick('estudiante', 'nivel'),
+      programa: pick('estudiante', 'programa'),
+      canal: pick('estudiante', 'canal'),
+      telefono: pick('estudiante', 'telefono'),
+    },
+    solicitud: {
+      fecha_inicio: pick('solicitud', 'fecha_inicio'),
+      fecha_solicitud: pick('solicitud', 'fecha_solicitud'),
+      motivo: pick('solicitud', 'motivo'),
+    },
+    indicadores: {
+      contacto_efectivo: pick('indicadores', 'contacto_efectivo'),
+      llamadas: pick('indicadores', 'llamadas'),
+      mensajes: pick('indicadores', 'mensajes'),
+      ingreso_aula: pick('indicadores', 'ingreso_aula'),
+      materias_cargadas: pick('indicadores', 'materias_cargadas'),
+      falla_carga_materias: pick('indicadores', 'falla_carga_materias'),
+      calificaciones: pick('indicadores', 'calificaciones'),
+      errores_operativos: pick('indicadores', 'errores_operativos'),
+      errores_financieros: pick('indicadores', 'errores_financieros'),
+      error_inscripcion: pick('indicadores', 'error_inscripcion'),
+      promesa_venta: pick('indicadores', 'promesa_venta'),
+      retencion_realizada: pick('indicadores', 'retencion_realizada'),
+      retencion_aceptada: pick('indicadores', 'retencion_aceptada'),
+      intencion_cancelacion_manifiesta: pick('indicadores', 'intencion_cancelacion_manifiesta'),
+    },
+    hechos: source.flatMap(result => result.hechos || []),
+    visual_facts: {
+      aula_virtual: {
+        ingreso_aula: pickVisual('aula_virtual', 'ingreso_aula'),
+        ultimo_acceso_curso: pickVisual('aula_virtual', 'ultimo_acceso_curso'),
+        hora_acceso: pickVisual('aula_virtual', 'hora_acceso'),
+        curso: pickVisual('aula_virtual', 'curso'),
+        grupo: pickVisual('aula_virtual', 'grupo'),
+        calificacion: pickVisual('aula_virtual', 'calificacion'),
+        actividades_entregadas: pickVisual('aula_virtual', 'actividades_entregadas'),
+        clics_detectados: pickVisual('aula_virtual', 'clics_detectados'),
+        materias_cargadas: pickVisual('aula_virtual', 'materias_cargadas'),
+        seleccion_modalidad: pickVisual('aula_virtual', 'seleccion_modalidad'),
+      },
+      siu: {
+        estatus_alumno: pickVisual('siu', 'estatus_alumno'),
+        ultima_sesion: pickVisual('siu', 'ultima_sesion'),
+        fecha_inicio: pickVisual('siu', 'fecha_inicio'),
+        primer_pago: pickVisual('siu', 'primer_pago'),
+        proximo_pago_monto: pickVisual('siu', 'proximo_pago_monto'),
+        telefono: pickVisual('siu', 'telefono'),
+        correo: pickVisual('siu', 'correo'),
+        calificaciones_registradas: pickVisual('siu', 'calificaciones_registradas'),
+      },
+      contacto: {
+        telefono_registrado: pickVisual('contacto', 'telefono_registrado'),
+        correo_registrado: pickVisual('contacto', 'correo_registrado'),
+        medio: pickVisual('contacto', 'medio'),
+        ultima_interaccion: pickVisual('contacto', 'ultima_interaccion'),
+      },
+    },
+  };
+}
+
 function detectConflicts(hechos: ExtractedFact[], draft: Partial<DraftCase>): ConflictItem[] {
   const conflictos: ConflictItem[] = [];
   const byField: Record<string, ExtractedFact[]> = {};
@@ -355,7 +427,7 @@ async function processSingleEvidence(ev: InternalEvidenceDraft, usage: UsageColl
     allFacts.push(...normalizeFacts(extraction.result, ev.id).map(f => ({ ...f, pagina: page.page })));
   }
   ev.extraccion = { textoExtraido: '', resumen: pdfText.reason, hechos: allFacts };
-  return mergeExtractionResults(results) as any as ValidatedExtractionResult;
+  return mergeValidatedExtractionResults(results);
 }
 
 export async function processEvidences(files: MulterFile[]): Promise<ProcessResult> {
