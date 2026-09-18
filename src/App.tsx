@@ -210,11 +210,17 @@ export default function App() {
   });
   const [isCaseMenuOpen, setIsCaseMenuOpen] = useState(false);
 
+  useEffect(() => {
+    if (tickets.length === 0) return;
+    if (!selectedTicketId || !tickets.some(t => t.id === selectedTicketId)) {
+      setSelectedTicketId(tickets[0].id);
+    }
+  }, [tickets, selectedTicketId]);
+
   const selectedTicket = tickets.find(t => t.id === selectedTicketId) ?? tickets[0];
-  const calls = [
-    selectedTicket.primaryCall,
-    ...(selectedTicket.secondaryCalls || [])
-  ];
+  const calls = selectedTicket
+    ? [selectedTicket.primaryCall, ...(selectedTicket.secondaryCalls || [])].filter(Boolean)
+    : [];
   const activeCallId = calls[0]?.id || '';
 
   const ticketIndex = tickets.findIndex(t => t.id === selectedTicketId);
@@ -338,6 +344,7 @@ const handleSaveDictamenDraft = useCallback((text: string) => {
   );
 
   const handleSaveOverrides = useCallback((updates: Partial<ManualOverrides>) => {
+    if (!selectedTicket) return;
     const current = selectedTicket.manualOverrides || {};
     const next = { ...current };
     for (const [key, value] of Object.entries(updates)) {
@@ -352,7 +359,7 @@ const handleSaveDictamenDraft = useCallback((text: string) => {
     });
   }, [backend, selectedTicketId, selectedTicket]);
 
-  const primaryCallDuration = selectedTicket.primaryCall?.durationSeconds || 0;
+  const primaryCallDuration = selectedTicket?.primaryCall?.durationSeconds || 0;
 
   if (backend.loading && tickets.length === 0) {
     return <main className="min-h-screen bg-zinc-950 text-zinc-100 p-8 flex items-center justify-center text-zinc-400">Cargando expedientes del backend...</main>;
