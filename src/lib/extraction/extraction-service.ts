@@ -140,6 +140,27 @@ function mergeField(candidates: any[]): ExtractedField<any> {
   return normalizeField(sorted[0]);
 }
 
+function hasValue(field?: ExtractedField<any>): boolean {
+  return field?.valor !== null && field?.valor !== undefined && field.valor !== '' && field.confianza !== 'BAJA';
+}
+
+function promoteField<T>(target: ExtractedField<T>, source?: ExtractedField<T>): ExtractedField<T> {
+  if (hasValue(target) || !hasValue(source)) return target;
+  return source as ExtractedField<T>;
+}
+
+function booleanFromVisual(source?: ExtractedField<any>, inferredValue?: boolean): ExtractedField<boolean> | null {
+  if (hasValue(source) && typeof source?.valor === 'boolean') return source as ExtractedField<boolean>;
+  if (hasValue(source) && inferredValue !== undefined) {
+    return { ...source, valor: inferredValue, textoCitado: source?.textoCitado || String(source?.valor) } as ExtractedField<boolean>;
+  }
+  return null;
+}
+
+function firstValuedField<T>(...fields: (ExtractedField<T> | undefined)[]): ExtractedField<T> | undefined {
+  return fields.find(field => hasValue(field));
+}
+
 function confidenceRank(confidence: FieldConfidence): number {
   return { ALTA: 4, MEDIA: 3, BAJA: 2, CONFLICTO: 1 }[confidence];
 }
@@ -150,7 +171,7 @@ function mergeExtractionResults(results: ValidatedExtractionResult[]): Partial<D
   const pickVisual = (section: 'aula_virtual' | 'siu' | 'contacto', key: string) =>
     mergeField(source.map(result => (result as any).visual_facts?.[section]?.[key]));
 
-  return {
+  const merged: Partial<DraftCase> = {
     student: {
       folio: pick('estudiante', 'folio'),
       matricula: pick('estudiante', 'matricula'),
@@ -215,6 +236,31 @@ function mergeExtractionResults(results: ValidatedExtractionResult[]): Partial<D
     conflictos: [],
     completitud: 0,
   };
+
+  const student = merged.student as StudentData;
+  const request = merged.request as RequestData;
+  const academic = merged.academic as AcademicIndicators;
+  const vf = merged.visualFacts;
+
+  if (vf) {
+    student.telefono = promoteField(student.telefono, firstValuedField(vf.contacto.telefonoRegistrado, vf.siu.telefono));
+    request.fechaInicio = promoteField(request.fechaInicio, vf.siu.fechaInicio);
+
+    const ingresoAula = booleanFromVisual(vf.aulaVirtual.ingresoAula)
+      || booleanFromVisual(vf.aulaVirtual.ultimoAccesoCurso, true)
+      || booleanFromVisual(vf.aulaVirtual.clicsDetectados, Number(vf.aulaVirtual.clicsDetectados?.valor) > 0)
+      || booleanFromVisual(vf.aulaVirtual.actividadesEntregadas, Number(vf.aulaVirtual.actividadesEntregadas?.valor) > 0);
+    if (ingresoAula) academic.ingresoAula = promoteField(academic.ingresoAula, ingresoAula);
+
+    const materiasCargadas = booleanFromVisual(vf.aulaVirtual.materiasCargadas);
+    if (materiasCargadas) academic.materiasCargadas = promoteField(academic.materiasCargadas, materiasCargadas);
+
+    const calificaciones = booleanFromVisual(vf.siu.calificacionesRegistradas)
+      || booleanFromVisual(vf.aulaVirtual.calificacion, true);
+    if (calificaciones) academic.calificaciones = promoteField(academic.calificaciones, calificaciones);
+  }
+
+  return merged;
 }
 
 function detectConflicts(hechos: ExtractedFact[], draft: Partial<DraftCase>): ConflictItem[] {

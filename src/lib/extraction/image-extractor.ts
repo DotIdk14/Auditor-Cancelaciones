@@ -47,7 +47,19 @@ async function callVision(model: string, task: string, evidenceId: string, image
 export async function extractFromImage(buffer: Buffer, mimeType: string, evidenceId: string, usage: UsageCollector): Promise<StructuredExtractionOutput> {
   const models = getAiModels();
   const imageUrl = `data:${mimeType};base64,${buffer.toString('base64')}`;
-  const raw = await callVision(models.vision, 'image_vision_extraction', evidenceId, imageUrl, usage, false);
+  let raw: string;
+  try {
+    raw = await callVision(models.vision, 'image_vision_extraction', evidenceId, imageUrl, usage, false);
+  } catch (primaryError) {
+    const fallbackRaw = await callVision(models.fallback, 'image_vision_extraction_fallback', evidenceId, imageUrl, usage, true);
+    const fallbackParsed = parseExtractionJson(extractJsonContent(fallbackRaw));
+    if (!fallbackParsed.success) {
+      const error = (fallbackParsed as { success: false; error: string }).error;
+      const primaryMessage = primaryError instanceof Error ? primaryError.message : String(primaryError);
+      throw new Error(`Extracción de imagen inválida tras fallback: ${error}. Error primario: ${primaryMessage}`);
+    }
+    return { result: fallbackParsed.data, fallbackUsed: true };
+  }
   const parsed = parseExtractionJson(extractJsonContent(raw));
   if (parsed.success) return { result: parsed.data, fallbackUsed: false };
 
