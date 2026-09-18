@@ -1,7 +1,8 @@
 import express from 'express';
 import multer from 'multer';
-import { analyzeCancellationCase, CaseDecisionData } from '../lib/decision-engine/decision-engine.js';
-import { DecisionResult } from '../lib/decision-engine/types.js';
+import { analyzeCancellationCase } from '../lib/decision-engine/decision-engine.js';
+import type { CaseDecisionData } from '../lib/decision-engine/decision-engine.js';
+import type { DecisionResult } from '../lib/decision-engine/types.js';
 import { processEvidences } from '../lib/extraction/extraction-service.js';
 import { persistRouter } from './persist.js';
 
@@ -29,9 +30,12 @@ const upload = multer({
   },
 });
 
-app.get('/health', (_req, res) => {
+const healthHandler: express.RequestHandler = (_req, res) => {
   res.json({ status: 'ok', service: 'auditor-cancelaciones-headless', timestamp: new Date().toISOString() });
-});
+};
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 app.post('/api/audit/evaluate', async (req, res) => {
   try {

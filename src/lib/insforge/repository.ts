@@ -1,5 +1,5 @@
-import { getAdminClient, EVIDENCE_BUCKET } from './client';
-import {
+import { getAdminClient, EVIDENCE_BUCKET } from './client.js';
+import type {
   AuditEventRow,
   CreateTicketInput,
   DecisionRunRow,
@@ -13,7 +13,7 @@ import {
   TicketRow,
   TicketSnapshot,
   TranscriptSegmentRow,
-} from './types';
+} from './types.js';
 
 function throwDb(error: unknown, context: string): never {
   const message = error instanceof Error ? error.message : String(error);

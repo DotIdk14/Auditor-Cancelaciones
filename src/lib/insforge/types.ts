@@ -1,4 +1,4 @@
-import { DecisionResult } from '../decision-engine/types';
+import type { DecisionResult } from '../decision-engine/types.js';
 
 export interface TicketRow {
   id: string;

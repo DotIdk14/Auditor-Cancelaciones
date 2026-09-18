@@ -24,9 +24,10 @@ import {
   saveDictamenVersion,
   updateEvidence,
   updateTicket,
-} from '../lib/insforge/repository';
-import { analyzeCancellationCase, CaseDecisionData } from '../lib/decision-engine/decision-engine';
-import { DecisionResult } from '../lib/decision-engine/types';
+} from '../lib/insforge/repository.js';
+import { analyzeCancellationCase } from '../lib/decision-engine/decision-engine.js';
+import type { CaseDecisionData } from '../lib/decision-engine/decision-engine.js';
+import type { DecisionResult } from '../lib/decision-engine/types.js';
 
 export const persistRouter = express.Router();
 
