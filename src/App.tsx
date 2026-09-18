@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo, type FormEvent, type ReactNode } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef, type FormEvent, type ReactNode } from 'react';
 import { ShieldCheck, Plus, AlertTriangle, CheckCircle2, FileText, FolderOpen, Gavel, Headphones, Menu, Scale, X } from 'lucide-react';
 import { AuditCase, EvidenceItem } from './types/audit';
 import { CaseHeader } from './components/audit/CaseHeader';
@@ -191,7 +191,9 @@ function CaseDetailsEditModal({
 
 export default function App() {
   const backend = useInsforgeBackend();
+  const { persistEvaluation } = backend;
   const tickets = backend.cases;
+  const lastPersistedEvaluationRef = useRef<string | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState('');
   const [activeTab, setActiveTab] = useState<AuditTab>('summary');
   const [decisionResult, setDecisionResult] = useState<DecisionResult | null>(null);
@@ -240,18 +242,26 @@ export default function App() {
           source: e.source,
           date: e.date,
           description: e.description,
-          url: e.fileUrl,
+          url: e.fileUrl?.startsWith('data:') ? undefined : e.fileUrl,
         })),
       };
       const result = analyzeCancellationCase(decisionDataWithEvidence);
       setDecisionResult(result);
-      backend.persistEvaluation(selectedTicket.id, decisionDataWithEvidence);
+      const persistSignature = JSON.stringify({
+        id: selectedTicket.id,
+        decisionData: selectedTicket.decisionData,
+        evidences: (selectedTicket.evidences || []).map(e => ({ id: e.id, type: e.type, name: e.name, source: e.source, date: e.date })),
+      });
+      if (lastPersistedEvaluationRef.current !== persistSignature) {
+        lastPersistedEvaluationRef.current = persistSignature;
+        void persistEvaluation(selectedTicket.id, decisionDataWithEvidence);
+      }
     } catch (error) {
       console.error('Error analyzing case:', error);
     } finally {
       setIsAnalyzing(false);
     }
-  }, [selectedTicket, backend]);
+  }, [selectedTicket, persistEvaluation]);
 
   useEffect(() => {
     if (tickets.length > 0 && !tickets.some(t => t.id === selectedTicketId)) {
