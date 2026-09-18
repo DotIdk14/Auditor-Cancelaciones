@@ -4,4 +4,3 @@ export * from './template-fields';
 export * from './ticket-workflow';
 export * from './evidence';
 export * from './analysis';
-export * from './transcript';

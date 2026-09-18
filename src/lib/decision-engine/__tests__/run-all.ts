@@ -1,5 +1,6 @@
 import { runAllDecisionTests } from './decision-engine.test';
 import { runGoldenCasesRegression } from './golden-cases';
+import { runExtractionLayerTests } from '../../extraction/__tests__/extraction-layer.test';
 import '../../tickets/__tests__/phase1.test';
 import '../../tickets/__tests__/phase2-4.test';
 
@@ -51,9 +52,20 @@ for (const g of goldenTests) {
 }
 console.log(`Subtotal Golden Cases: ${goldenPassed}/${goldenTests.length} aprobados.\n`);
 
+console.log('--- 3. SUITE CAPA DE EXTRACCIÓN IA ---');
+const extractionTests = runExtractionLayerTests();
+let extractionPassed = 0;
+for (const t of extractionTests) {
+  const icon = t.passed ? '✓ PASÓ' : '✗ FALLÓ';
+  console.log(`[${icon}] ${t.name}`);
+  if (!t.passed) console.log(`  ERROR: ${t.error}`);
+  if (t.passed) extractionPassed++;
+}
+console.log(`Subtotal Extracción IA: ${extractionPassed}/${extractionTests.length} aprobadas.\n`);
+
 // RESUMEN GLOBAL
-const totalTests = unitTests.length + goldenTests.length;
-const totalPassed = unitPassed + goldenPassed;
+const totalTests = unitTests.length + goldenTests.length + extractionTests.length;
+const totalPassed = unitPassed + goldenPassed + extractionPassed;
 
 console.log('================================================================');
 console.log(`BALANCE FINAL: ${totalPassed} / ${totalTests} PRUEBAS EXITOSAS (${Math.round((totalPassed / totalTests) * 100)}%)`);

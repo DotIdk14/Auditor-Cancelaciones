@@ -1,174 +1,153 @@
-import React from 'react';
-import {
-  Sparkles,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  ChevronRight,
-  RotateCw,
-  HelpCircle,
-  Layers,
-  ArrowRight
-} from 'lucide-react';
+import { ReactNode } from 'react';
+import { AlertTriangle, CheckCircle2, Gavel, Scale, Target, TrendingUp } from 'lucide-react';
 import { DecisionResult } from '../../lib/decision-engine/types';
 
 interface CaseAnalysisProps {
-  decisionResult: DecisionResult;
-  isAnalyzing: boolean;
-  onRunAnalysis: () => void;
-  onOpenDecisionTree: () => void;
+  result: DecisionResult | null;
+  onViewDecisionTree: () => void;
 }
 
-export const CaseAnalysis: React.FC<CaseAnalysisProps> = ({
-  decisionResult,
-  isAnalyzing,
-  onRunAnalysis,
-  onOpenDecisionTree
-}) => {
-  const appliedRules = decisionResult?.reglasAplicadas || decisionResult?.appliedRules || [];
-  const rejectedRules = decisionResult?.reglasDescartadas || decisionResult?.rejectedRules || [];
-  const conflicts = decisionResult?.conflictos || decisionResult?.conflicts || [];
+const classificationLabels: Record<string, string> = {
+  CANCELACION_VENTA: 'Cancelación de Venta',
+  CANCELACION_VENTA_A_SOLICITUD_ESTUDIANTE: 'Cancelación de Venta a Solicitud del Estudiante',
+  CANCELACION_VENTA_ILOCALIZABLE: 'Cancelación de Venta por Ilocalizable',
+  CANCELACION_VENTA_OPERATIVA: 'Cancelación de Venta Operativa',
+  CANCELACION_VENTA_PROMESA_NO_CUMPLIDA: 'Cancelación de Venta por Promesa No Cumplida',
+  CANCELACION_DE_MATRICULA: 'Cancelación de Matrícula (Mystery Shopper)',
+  BAJA: 'Baja Definitiva',
+  REQUIERE_REVISION: 'Requiere Revisión Manual'
+};
+
+export function CaseAnalysis({ result, onViewDecisionTree }: CaseAnalysisProps) {
+  if (!result) {
+    return (
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+        <div className="text-center py-8 text-zinc-500">
+          <Scale className="h-12 w-12 mx-auto text-zinc-700 mb-3" />
+          <p className="font-medium text-zinc-400">Sin análisis disponible</p>
+          <p className="text-xs mt-1">Selecciona un caso para ver el análisis</p>
+        </div>
+      </div>
+    );
+  }
+
+  const determinantRules = result.appliedRules.filter(r => r.status === 'DETERMINANTE');
+  const confidencePercent = Math.round(result.confidence * 100);
 
   return (
-    <div id="case-analysis-panel" className="bg-slate-900 rounded-2xl border border-slate-800 shadow-md p-5 mb-4">
-      {/* Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-indigo-950/80 text-indigo-400 border border-indigo-700/50 flex items-center justify-center">
-            <Sparkles className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-xs font-bold text-slate-100 uppercase tracking-wider">
-              Análisis del Motor de Reglas
-            </h3>
-          </div>
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 space-y-4">
+      <div className="flex items-start justify-between">
+        <div>
+          <h3 className="font-bold text-white">Análisis Normativo</h3>
+          <p className="text-xs text-zinc-500">Resumen del motor de decisiones</p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-semibold text-indigo-300 bg-indigo-950/80 border border-indigo-700/60 px-2 py-0.5 rounded-md">
-            Políticas UTEL
-          </span>
-          <button
-            id="btn-re-analyze-case"
-            onClick={onRunAnalysis}
-            disabled={isAnalyzing}
-            className="p-1 text-slate-400 hover:text-sky-400 rounded-md hover:bg-slate-800 transition-colors disabled:opacity-50"
-            title="Re-ejecutar motor de reglas"
-          >
-            <RotateCw className={`w-3.5 h-3.5 ${isAnalyzing ? 'animate-spin text-sky-400' : ''}`} />
-          </button>
-        </div>
-      </div>
-
-      {/* Main Proposition */}
-      <div className="pt-3 pb-3">
-        <div className="flex items-center justify-between mb-1.5">
-          <div className="text-[11px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Propuesta de dictamen</span>
-          </div>
-          <span className="text-[11px] font-bold text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-700">
-            Confianza: {decisionResult.confidence}%
-          </span>
-        </div>
-
-        <div className="bg-slate-950/80 rounded-xl p-3.5 border border-slate-800">
-          <div className="text-sm font-black text-slate-100 tracking-tight flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-            {decisionResult.classificationName}
-          </div>
-          
-          <div className="mt-2 text-xs text-slate-400">
-            <span className="font-semibold text-slate-300">Causa raíz: </span>
-            <span className="text-slate-200">{decisionResult.causaRaiz}</span>
-          </div>
-
-          <div className="mt-1 text-[11px] text-indigo-300 font-mono">
-            {decisionResult.politicaArticulo}
-          </div>
-        </div>
-      </div>
-
-      {/* Conflicts if any */}
-      {conflicts.length > 0 && (
-        <div className="mb-3 p-3 bg-amber-950/40 border border-amber-600/50 rounded-xl text-xs">
-          <div className="flex items-center gap-1.5 font-bold text-amber-300 mb-1">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-            <span>Conflicto normativo resuelto:</span>
-          </div>
-          <div className="text-[11px] text-amber-200/90 space-y-1">
-            <div className="font-medium">
-              • {conflicts[0].ruleA.name} <span className="font-bold text-amber-400">vs</span> {conflicts[0].ruleB.name}
-            </div>
-            <div className="text-slate-300 bg-slate-950/70 p-2 rounded-lg border border-amber-700/50 leading-snug">
-              {conflicts[0].resolution}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Applied Rules */}
-      <div className="pb-3 border-b border-slate-800">
-        <div className="text-[11px] uppercase font-bold text-slate-400 tracking-wider mb-2 flex items-center justify-between">
-          <span>Reglas aplicadas</span>
-          <span className="text-[10px] text-emerald-400 font-semibold font-mono">
-            {appliedRules.length} detectadas
-          </span>
-        </div>
-
-        <ul className="space-y-2">
-          {appliedRules.map((rule) => {
-            const isDeterminant = rule.status === 'DETERMINANTE' || rule.priority <= 2;
-            return (
-              <li
-                key={rule.id}
-                className={`text-xs p-2 rounded-lg border flex items-start gap-2 ${
-                  isDeterminant
-                    ? 'bg-emerald-950/20 border-emerald-600/40 text-emerald-200'
-                    : 'bg-slate-950/50 border-slate-800 text-slate-300'
-                }`}
-              >
-                <span className={`font-bold mt-0.5 ${isDeterminant ? 'text-emerald-400' : 'text-sky-400'}`}>
-                  {isDeterminant ? '★' : '✓'}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium">{rule.title}</div>
-                  <div className="text-[10px] text-slate-400 font-mono mt-0.5">{rule.article}</div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-
-      {/* Rejected Rules (if any) */}
-      {rejectedRules.length > 0 && (
-        <div className="py-2.5 border-b border-slate-800">
-          <div className="text-[11px] uppercase font-bold text-slate-400 tracking-wider mb-1.5">
-            Reglas descartadas
-          </div>
-          <ul className="space-y-1">
-            {rejectedRules.slice(0, 2).map((rule) => (
-              <li key={rule.id} className="text-xs text-slate-400 flex items-start gap-2">
-                <span className="text-rose-400 font-bold mt-0.5">✕</span>
-                <span className="truncate">{rule.title}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* CTA to open full decision tree */}
-      <div className="pt-3">
         <button
-          id="btn-ver-razonamiento-completo"
-          onClick={onOpenDecisionTree}
-          className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold text-indigo-300 hover:text-indigo-200 bg-indigo-950/70 hover:bg-indigo-900/80 border border-indigo-700/60 transition-colors shadow-2xs"
+          onClick={onViewDecisionTree}
+          className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
+          aria-label="Ver árbol de decisión"
         >
-          <span>Ver árbol de decisión y razonamiento</span>
-          <ChevronRight className="w-3.5 h-3.5" />
+          <Target className="h-5 w-5" />
         </button>
       </div>
+
+      <div className="space-y-3">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Gavel className="h-5 w-5 text-emerald-400" />
+              <span className="font-medium text-white">Clasificación</span>
+            </div>
+            <span className="px-3 py-1 rounded-full bg-emerald-950/50 border border-emerald-800 text-emerald-300 text-xs font-bold">
+              {classificationLabels[result.classification] || result.classification}
+            </span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-sky-400" />
+              <span className="font-medium text-white">Confianza</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-24 h-2 bg-zinc-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                  style={{ width: `${confidencePercent}%` }}
+                />
+              </div>
+              <span className="text-sm font-bold text-emerald-400 w-10 text-right">{confidencePercent}%</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Scale className="h-4 w-4 text-amber-400" />
+            <span className="font-medium text-white">Causa Raíz</span>
+          </div>
+          <p className="text-sm text-zinc-300 ml-6">{result.rootCause.replace(/_/g, ' ').toLowerCase()}</p>
+        </div>
+
+        {result.hardBlockers.length > 0 && (
+          <div className="rounded-xl border border-rose-800 bg-rose-950/30 p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="h-4 w-4 text-rose-400" />
+              <span className="font-medium text-rose-300">Bloqueos Duros Detectados</span>
+            </div>
+            <ul className="ml-6 space-y-1 text-sm text-rose-200">
+              {result.hardBlockers.map((blocker, i) => (
+                <li key={i} className="flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+                  {blocker.replace(/_/g, ' ').toLowerCase()}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+            <span className="font-medium text-white">Reglas Determinantes</span>
+          </div>
+          {determinantRules.length === 0 ? (
+            <p className="text-xs text-zinc-500 ml-6">Ninguna regla determinante aplicada</p>
+          ) : (
+            <ul className="ml-6 space-y-1 text-sm text-emerald-300">
+              {determinantRules.slice(0, 3).map((rule, i) => (
+                <li key={i} className="flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  {rule.title}
+                </li>
+              ))}
+              {determinantRules.length > 3 && (
+                <li className="text-xs text-zinc-500">+{determinantRules.length - 3} más</li>
+              )}
+            </ul>
+          )}
+        </div>
+
+        {result.conflicts && result.conflicts.length > 0 && (
+          <div className="rounded-xl border border-amber-800 bg-amber-950/30 p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="h-4 w-4 text-amber-400" />
+              <span className="font-medium text-amber-300">Conflictos Resueltos</span>
+            </div>
+            <p className="text-sm text-amber-200 ml-6">
+              {result.conflicts.length} conflicto{result.conflicts.length > 1 ? 's' : ''} resuelto{result.conflicts.length > 1 ? 's' : ''} por precedencia normativa
+            </p>
+          </div>
+        )}
+      </div>
+
+      <button
+        onClick={onViewDecisionTree}
+        className="w-full py-2 px-4 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:border-zinc-600 transition-colors flex items-center justify-center gap-2"
+      >
+        <Target className="h-4 w-4" />
+        <span>Ver Árbol de Decisión Completo</span>
+      </button>
     </div>
   );
-};
+}

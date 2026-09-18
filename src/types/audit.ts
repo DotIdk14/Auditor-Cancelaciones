@@ -1,61 +1,10 @@
-export type EducationLevel = 'LICENCIATURA' | 'POSGRADO' | 'EJECUTIVAS' | 'LICENCIATURAS_ALIANZAS';
+import { EducationLevel, CallRecord, TranscriptSegment, EffectiveContactResult, EffectiveContactCriterion } from './domain';
+
+export type { EducationLevel, CallRecord, TranscriptSegment, EffectiveContactResult, EffectiveContactCriterion };
 
 export type CaseStatus = 'EN_ANALISIS' | 'PENDIENTE_REVISION' | 'DICTAMINADO' | 'APROBADO' | 'RECHAZADO';
 
 export type DictamenStatus = 'BORRADOR' | 'PENDIENTE_REVISION' | 'APROBADO';
-
-export interface EffectiveContactCriterion {
-  criterio: string;
-  cumplido: boolean;
-  evidencia: string;
-  timestampRef?: string;
-}
-
-export interface EffectiveContactResult {
-  efectivo: boolean;
-  criterios: EffectiveContactCriterion[];
-  observaciones?: string;
-}
-
-export interface TranscriptSegment {
-  id: string;
-  speaker: 'advisor' | 'customer';
-  speakerName: string;
-  start: string;
-  end: string;
-  startSeconds: number;
-  endSeconds: number;
-  text: string;
-  sentiment?: 'positive' | 'neutral' | 'negative' | 'frustrated';
-  highlightTags?: string[];
-  keyMoment?: {
-    type: 'contact_criteria' | 'cancellation_intent' | 'operational_complaint' | 'sales_promise';
-    label: string;
-  };
-}
-
-export interface CallRecord {
-  id: string;
-  title: string;
-  date: string;
-  time: string;
-  duration: string;
-  durationSeconds: number;
-  status: 'TRANSCRIPCION_COMPLETADA' | 'EN_PROCESO' | 'FALLIDA';
-  campaign: string;
-  phoneNumber: string;
-  intentsRatio: string;
-  audioUrl?: string;
-  transcript: TranscriptSegment[];
-  sentiment: 'Positivo' | 'Neutro' | 'Negativo' | 'Conflictivo';
-  detectedIntentions: string[];
-  keyMoments: Array<{
-    timestamp: string;
-    label: string;
-    type: 'request' | 'error' | 'contact' | 'warning';
-  }>;
-  effectiveContact: EffectiveContactResult;
-}
 
 export type EvidenceSource = 
   | 'Flokzu' 
@@ -115,7 +64,7 @@ export interface DictamenData {
 }
 
 export interface AuditCase {
-  id: string; // CAVE-30274
+  id: string;
   status: CaseStatus;
   statusLabel: string;
   matricula: string;
@@ -123,10 +72,10 @@ export interface AuditCase {
   program: string;
   level: EducationLevel;
   channel: string;
-  startDate: string; // 31/08/2026
-  requestDate: string; // 07/09/2026
-  daysFromStart: number; // 7 calendar days
-  workingDaysFromStart: number; // 5 working days
+  startDate: string;
+  requestDate: string;
+  daysFromStart: number;
+  workingDaysFromStart: number;
   requestedPolicy: string;
   requestReason: string;
   studentContactNumber: string;
@@ -136,6 +85,5 @@ export interface AuditCase {
   evidences: EvidenceItem[];
   timeline: TimelineEvent[];
   dictamen: DictamenData;
-  // Raw decision parameters for the engine
   decisionData: import('../lib/decision-engine/types').CaseDecisionData;
 }

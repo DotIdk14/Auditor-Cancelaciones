@@ -25,8 +25,8 @@ test('recupera segmentos de transcripción ordenados desde una evidencia de audi
     sha256: 'f'.repeat(64),
     fechaEvidencia: '2026-04-06T09:00:00.000Z',
     transcript: [
-      { id: 'seg-2', speaker: 'auditor', speakerName: 'Gestor', start: '00:20', end: '00:32', startSeconds: 20, endSeconds: 32, text: 'No logramos confirmar contacto efectivo.' },
-      { id: 'seg-1', speaker: 'student', speakerName: 'Estudiante', start: '00:05', end: '00:12', startSeconds: 5, endSeconds: 12, text: 'No contestó la llamada.' }
+      { id: 'seg-2', evidenceId: 'ev-1', speaker: 'advisor', speakerName: 'Gestor', start: '00:20', end: '00:32', startSeconds: 20, endSeconds: 32, text: 'No logramos confirmar contacto efectivo.' },
+      { id: 'seg-1', evidenceId: 'ev-1', speaker: 'customer', speakerName: 'Estudiante', start: '00:05', end: '00:12', startSeconds: 5, endSeconds: 12, text: 'No contestó la llamada.' }
     ]
   });
 

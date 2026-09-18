@@ -1,215 +1,186 @@
-import React from 'react';
-import {
-  FileText,
-  FileCheck2,
-  AlertCircle,
-  Plus,
-  ChevronRight,
-  Download,
-  Maximize2,
-  ExternalLink,
-  ImageIcon,
-  GraduationCap,
-  PhoneCall,
-  Laptop
-} from 'lucide-react';
+import { ReactNode } from 'react';
+import { FileText, Image, Video, Music, FolderOpen, Search, Eye, Download, Plus, Clock, Calendar } from 'lucide-react';
 import { EvidenceItem } from '../../types/audit';
 
 interface EvidencePanelProps {
   evidences: EvidenceItem[];
   selectedEvidence: EvidenceItem | null;
-  onSelectEvidence: (item: EvidenceItem) => void;
-  onAddNewEvidence?: () => void;
+  onSelectEvidence: (evidence: EvidenceItem) => void;
+  onViewAll: () => void;
+  onAttachEvidence: () => void;
 }
 
-export const EvidencePanel: React.FC<EvidencePanelProps> = ({
-  evidences,
-  selectedEvidence,
-  onSelectEvidence,
-  onAddNewEvidence
-}) => {
-  const getSourceIcon = (source: string) => {
-    switch (source) {
-      case 'Flokzu':
-        return <FileText className="w-4 h-4 text-zinc-300" />;
-      case 'SIU':
-        return <GraduationCap className="w-4 h-4 text-zinc-300" />;
-      case 'I6':
-        return <PhoneCall className="w-4 h-4 text-zinc-300" />;
-      case 'Aula Virtual':
-        return <Laptop className="w-4 h-4 text-zinc-300" />;
-      case 'Capturas':
-        return <ImageIcon className="w-4 h-4 text-zinc-300" />;
-      default:
-        return <FileCheck2 className="w-4 h-4 text-zinc-400" />;
-    }
-  };
+const sourceIcons = {
+  Flokzu: <FileText className="h-4 w-4" />,
+  SIU: <FolderOpen className="h-4 w-4" />,
+  I6: <Music className="h-4 w-4" />,
+  'Aula Virtual': <Video className="h-4 w-4" />,
+  WhatsApp: <MessageSquare className="h-4 w-4" />,
+  Correo: <Mail className="h-4 w-4" />,
+  Capturas: <Image className="h-4 w-4" />,
+  Documentos: <FileText className="h-4 w-4" />,
+  Otros: <FileText className="h-4 w-4" />
+};
 
-  const safeEvidences = evidences || [];
-  const featuredScreenshot = safeEvidences.find(e => e.type === 'image') || safeEvidences[0];
+const typeIcons = {
+  image: <Image className="h-4 w-4" />,
+  pdf: <FileText className="h-4 w-4" />,
+  audio: <Music className="h-4 w-4" />,
+  document: <FileText className="h-4 w-4" />,
+  system_record: <FolderOpen className="h-4 w-4" />
+};
+
+const statusColors = {
+  DISPONIBLE: 'text-emerald-400 bg-emerald-950/30 border-emerald-800',
+  PENDIENTE: 'text-amber-400 bg-amber-950/30 border-amber-800',
+  ERROR: 'text-rose-400 bg-rose-950/30 border-rose-800',
+  REQUERIDA: 'text-sky-400 bg-sky-950/30 border-sky-800'
+};
+
+function MessageSquare({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+    </svg>
+  );
+}
+
+function Mail({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function formatDate(dateStr: string): string {
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return dateStr;
+  }
+}
+
+function getSourceLabel(source: EvidenceItem['source']): string {
+  const labels: Record<string, string> = {
+    'Flokzu': 'Flokzu',
+    'SIU': 'SIU',
+    'I6': 'I6',
+    'Aula Virtual': 'Aula Virtual',
+    'WhatsApp': 'WhatsApp',
+    'Correo': 'Correo',
+    'Capturas': 'Capturas',
+    'Documentos': 'Documentos',
+    'Otros': 'Otros'
+  };
+  return labels[source] || source;
+}
+
+export function EvidencePanel({ evidences, selectedEvidence, onSelectEvidence, onViewAll, onAttachEvidence }: EvidencePanelProps) {
+  const sortedEvidences = [...evidences].sort((a, b) => {
+    const aDate = new Date(a.date).getTime();
+    const bDate = new Date(b.date).getTime();
+    return bDate - aDate;
+  });
+
+  const displayEvidences = sortedEvidences.slice(0, 5);
 
   return (
-    <div id="evidence-panel-container" className="space-y-4">
-      {/* Evidence List Card */}
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 shadow-sm p-4">
-        <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-zinc-800 text-zinc-200 flex items-center justify-center border border-zinc-700">
-              <FileCheck2 className="w-4 h-4" />
-            </div>
-            <h3 className="text-xs font-bold text-zinc-100 uppercase tracking-wider">
-              Evidencias del caso
-            </h3>
-          </div>
-          <span className="text-[11px] font-semibold text-zinc-400 font-mono">
-            {safeEvidences.length} registradas
-          </span>
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <FolderOpen className="h-5 w-5 text-sky-400" />
+          <h3 className="font-bold text-white">Evidencias del Expediente</h3>
         </div>
-
-        {/* List items */}
-        <div className="divide-y divide-zinc-800/80">
-          {safeEvidences.map((ev) => {
-            const isLoaded = ev.status === 'DISPONIBLE';
-            const isPending = ev.status === 'PENDIENTE';
-
-            return (
-              <button
-                key={ev.id}
-                onClick={() => onSelectEvidence(ev)}
-                className="w-full text-left py-3 px-1 flex items-center justify-between group hover:bg-zinc-800/60 rounded-lg transition-colors"
-              >
-                <div className="flex items-start gap-3 min-w-0 pr-2">
-                  <div className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0 mt-0.5 border border-zinc-700 group-hover:border-zinc-600 transition-all">
-                    {getSourceIcon(ev.source)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-bold text-zinc-200 group-hover:text-zinc-100 truncate transition-colors">
-                      {ev.name}
-                    </div>
-                    <div className="text-[11px] text-zinc-400 truncate mt-0.5">
-                      {ev.description}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                    isLoaded 
-                      ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40' 
-                      : isPending 
-                      ? 'bg-amber-950/40 text-amber-300 border-amber-800/40' 
-                      : 'bg-zinc-800 text-zinc-400 border-zinc-700'
-                  }`}>
-                    {ev.statusLabel || (isLoaded ? 'Cargado' : 'Pendiente')}
-                  </span>
-                  <ChevronRight className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
-                </div>
-              </button>
-            );
-          })}
-
-          {/* Add extra evidence row */}
-          <div className="pt-2">
-            <button
-              onClick={onAddNewEvidence}
-              className="w-full flex items-center justify-between p-2 text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 rounded-lg border border-dashed border-zinc-700 transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                <Plus className="w-3.5 h-3.5 text-zinc-400" />
-                <span>Evidencias adicionales (Capturas / Documentos)</span>
-              </span>
-              <span className="text-[11px] text-zinc-300 font-semibold">+ Agregar</span>
-            </button>
-          </div>
+        <div className="flex items-center gap-2">
+          <span className="px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 text-xs font-medium">
+            {evidences.length} total
+          </span>
+          <button
+            onClick={onAttachEvidence}
+            className="p-2 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-400 hover:bg-zinc-700 hover:border-zinc-600 hover:text-white transition-colors"
+            aria-label="Adjuntar evidencia"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
-      {/* Visualizer card (Featured evidence preview as seen in screenshot) */}
-      {featuredScreenshot && (
-        <div className="bg-zinc-900 rounded-xl border border-zinc-800 shadow-sm p-4">
-          <div className="flex items-center justify-between pb-2 mb-2">
-            <button
-              onClick={() => onSelectEvidence(featuredScreenshot)}
-              className="text-xs font-bold text-zinc-200 hover:text-zinc-100 flex items-center gap-1 transition-colors"
-            >
-              <span>Visualizar evidencia</span>
-              <ChevronRight className="w-3.5 h-3.5 text-zinc-500" />
-            </button>
-            <span className="text-[10px] bg-zinc-800 text-zinc-400 border border-zinc-700 px-1.5 py-0.5 rounded font-mono">
-              Captura SIU / Aula
-            </span>
-          </div>
-
-          {/* Graphic mockup preview representing student portal */}
-          <div 
-            onClick={() => onSelectEvidence(featuredScreenshot)}
-            className="relative rounded-lg overflow-hidden border border-zinc-800 group cursor-pointer bg-zinc-950 aspect-video flex flex-col justify-between p-2 shadow-inner"
+      {evidences.length === 0 ? (
+        <div className="text-center py-8 text-zinc-500">
+          <FolderOpen className="h-12 w-12 mx-auto text-zinc-700 mb-3" />
+          <p className="font-medium text-zinc-400">Sin evidencias cargadas</p>
+          <p className="text-xs mt-1">Adjunta documentos para iniciar el análisis</p>
+          <button
+            onClick={onAttachEvidence}
+            className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-xl transition-colors"
           >
-            {/* Mock browser header */}
-            <div className="flex items-center justify-between pb-1 border-b border-zinc-800 text-[9px] text-zinc-400 font-mono">
-              <div className="flex items-center gap-1.5">
-                <div className="flex gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-600"></span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-600"></span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-600"></span>
-                </div>
-                <span className="truncate">aulavirtual.utel.edu.mx/dashboard/materias</span>
-              </div>
-              <span className="bg-rose-950/60 text-rose-300 border border-rose-800/40 px-1 rounded">ERROR CARGA</span>
-            </div>
-
-            {/* Simulated portal content with error */}
-            <div className="my-auto py-2 px-3 bg-zinc-900 rounded border border-zinc-800 text-center">
-              <div className="text-[10px] font-bold text-zinc-200 mb-0.5">
-                Portal del Estudiante • Matrícula 010847403
-              </div>
-              <div className="text-[9px] text-zinc-400 font-mono">
-                ⚠️ Sin asignaturas cargadas en el período activo (31/08/2026)
-              </div>
-            </div>
-
-            {/* Hover overlay with maximize */}
-            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-2xs">
-              <span className="px-3 py-1 bg-zinc-800 text-zinc-100 text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-lg border border-zinc-700">
-                <Maximize2 className="w-3.5 h-3.5 text-zinc-300" />
-                <span>Ampliar visor</span>
-              </span>
-            </div>
-          </div>
-
-          {/* Screenshot metadata row */}
-          <div className="flex items-center justify-between pt-2.5 text-xs text-zinc-400">
-            <div className="min-w-0 pr-2">
-              <div className="font-semibold text-zinc-200 truncate text-[11px]">
-                {featuredScreenshot.name}
-              </div>
-              <div className="text-[10px] text-zinc-500">
-                Imagen • {featuredScreenshot.fileSize || '2.4 MB'} • {featuredScreenshot.date}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1">
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectEvidence(featuredScreenshot);
-                }}
-                className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-md"
-                title="Descargar o ver archivo"
-              >
-                <Download className="w-3.5 h-3.5" />
-              </button>
-              <button 
-                onClick={() => onSelectEvidence(featuredScreenshot)}
-                className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-md"
-                title="Ver a pantalla completa"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
+            <Plus className="h-4 w-4" />
+            Adjuntar primera evidencia
+          </button>
         </div>
+      ) : (
+        <>
+          <div className="space-y-1 max-h-80 overflow-y-auto">
+            {displayEvidences.map(evidence => (
+              <button
+                key={evidence.id}
+                onClick={() => onSelectEvidence(evidence)}
+                className={`w-full rounded-xl p-3 transition-all text-left flex items-center gap-3 ${
+                  selectedEvidence?.id === evidence.id
+                    ? 'bg-emerald-950/30 border border-emerald-800'
+                    : 'bg-zinc-900/50 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900'
+                }`}
+              >
+                <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+                  statusColors[evidence.status as keyof typeof statusColors] || 'text-zinc-400 bg-zinc-900'
+                }`}>
+                  {(typeIcons as any)[evidence.type] || <FileText className="h-5 w-5" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-sm font-medium text-white truncate">{evidence.name}</p>
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      statusColors[evidence.status as keyof typeof statusColors] || 'text-zinc-400 bg-zinc-800'
+                    }`}>
+                      {evidence.status}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-zinc-500">
+                    <span className="flex items-center gap-1">
+                      {(sourceIcons as any)[evidence.source] || <FileText className="h-3 w-3" />}
+                      {getSourceLabel(evidence.source)}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {formatDate(evidence.date)}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      {(typeIcons as any)[evidence.type] || <FileText className="h-3 w-3" />}
+                      {evidence.type}
+                    </span>
+                  </div>
+                  {evidence.description && (
+                    <p className="text-[11px] text-zinc-500 line-clamp-1 mt-1">{evidence.description}</p>
+                  )}
+                </div>
+                <Eye className="h-4 w-4 text-zinc-500" />
+              </button>
+            ))}
+          </div>
+
+          {evidences.length > 5 && (
+            <button
+              onClick={onViewAll}
+              className="w-full py-2 px-3 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:border-zinc-600 transition-colors flex items-center justify-center gap-2 text-sm"
+            >
+              <Search className="h-4 w-4" />
+              Ver todas las evidencias ({evidences.length})
+            </button>
+          )}
+        </>
       )}
     </div>
   );
-};
+}

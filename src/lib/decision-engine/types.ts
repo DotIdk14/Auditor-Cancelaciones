@@ -1,11 +1,4 @@
-import { CallRecord, EducationLevel as AuditEducationLevel } from '../../types/audit';
-
-export type EducationLevel =
-  | 'LICENCIATURA'
-  | 'POSGRADO'
-  | 'EJECUTIVA'
-  | 'ALIANZA'
-  | 'UNKNOWN';
+import { CallRecord, EducationLevel, TranscriptSegment, EffectiveContactResult } from '../../types/domain';
 
 export type CancellationClassification =
   | 'CANCELACION_VENTA'
@@ -186,7 +179,7 @@ export interface CaseDecisionData {
   fechaSolicitud: string;
   diasHabilesDesdeInicio?: number;
   semanasDesdeInicio?: number;
-  nivelEducativo: AuditEducationLevel | EducationLevel;
+  nivelEducativo: EducationLevel;
   programa: string;
   estatusAlumno: string;
   canalVenta?: string;
@@ -230,6 +223,7 @@ export interface CaseDecisionData {
   cambioCicloReincidenteNoIngreso?: boolean;
   cambioCicloRevalidacion?: boolean;
   mysteryShopper?: boolean;
+  evidences?: Evidence[];
 }
 
 export interface AppliedRule {

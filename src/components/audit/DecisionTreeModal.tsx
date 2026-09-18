@@ -1,255 +1,198 @@
-import React from 'react';
-import {
-  X,
-  Sparkles,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  GitFork,
-  ArrowDown,
-  Layers,
-  ShieldCheck,
-  Award
-} from 'lucide-react';
-import { DecisionResult } from '../../lib/decision-engine/types';
-import { CaseDecisionData } from '../../lib/decision-engine/types';
+import { ReactNode } from 'react';
+import { X, CheckCircle2, AlertTriangle, ChevronRight, Scale, Target, Search } from 'lucide-react';
+import { DecisionResult, RuleConflict } from '../../lib/decision-engine/types';
 
 interface DecisionTreeModalProps {
-  decisionResult: DecisionResult;
-  decisionData: CaseDecisionData;
+  isOpen: boolean;
   onClose: () => void;
+  result: DecisionResult | null;
 }
 
-export const DecisionTreeModal: React.FC<DecisionTreeModalProps> = ({
-  decisionResult,
-  decisionData,
-  onClose
-}) => {
-  if (!decisionData) return null;
-  const conflicts = decisionResult?.conflictos || decisionResult?.conflicts || [];
-  const priorities = [
-    {
-      level: 1,
-      title: 'Prioridad 1: Calificaciones y Devengamiento (Art. 5.7.d)',
-      evaluation: decisionData.calificaciones 
-        ? 'Cumplida (Forzó Baja Definitiva)' 
-        : 'Descartada (Sin calificaciones registradas)',
-      passed: !decisionData.calificaciones,
-      notes: 'Si el alumno tiene calificaciones en Bimestre 1 o inicial, por ningún motivo aplica cancelación de venta.'
-    },
-    {
-      level: 2,
-      title: 'Prioridad 2: Reglas Especiales de Política (Art. 5.7.c / 5.10)',
-      evaluation: decisionData.canalVenta?.includes('Mystery') 
-        ? 'Mystery Shopper detectado' 
-        : decisionData.invasionCiclo 
-        ? 'Invasión de Ciclo sin Grado Previo' 
-        : 'Descartada (Canal regular sin invasión)',
-      passed: !decisionData.canalVenta?.includes('Mystery') && !decisionData.invasionCiclo,
-      notes: 'Mystery Shopper genera cancelación de matrícula sin impacto en KPI. Invasión de ciclo genera cancelación.'
-    },
-    {
-      level: 3,
-      title: 'Prioridad 3: Errores Operativos Institucionales (Art. 5.9)',
-      evaluation: decisionResult.tipo === 'CANCELACION_VENTA_OPERATIVA' 
-        ? 'Cumplida (Determinante para Cancelación Operativa)' 
-        : 'Sin errores operativos concluyentes',
-      passed: decisionResult.tipo === 'CANCELACION_VENTA_OPERATIVA',
-      notes: 'Falla en carga de materias, errores de finanzas/cobranza o falta de canalización formal a Éxito Estudiantil.'
-    },
-    {
-      level: 4,
-      title: 'Prioridad 4: Promesa de Venta No Cumplida (Art. 5.6)',
-      evaluation: decisionData.promesaVenta 
-        ? 'Cumplida (Información engañosa acreditada)' 
-        : 'Descartada (Speech conforme a política)',
-      passed: decisionData.promesaVenta,
-      notes: 'Oferta falsa, tendenciosa o discrepante con el programa curricular.'
-    },
-    {
-      level: 5,
-      title: 'Prioridad 5: Error de Inscripción / Ajustes en 20 Días (Art. 5.5)',
-      evaluation: decisionData.errorInscripcion && !decisionData.ajusteRealizado
-        ? 'Cumplida (Ajuste no aplicado en plazo)' 
-        : 'Descartada (Inscripción correcta o ajuste realizado)',
-      passed: Boolean(decisionData.errorInscripcion && !decisionData.ajusteRealizado),
-      notes: 'Programa, paquete, ciclo o campus incorrecto no resuelto en 20 días hábiles.'
-    },
-    {
-      level: 6,
-      title: 'Prioridad 6: Estudiante Ilocalizable (Art. 5.2 / 5.8)',
-      evaluation: decisionResult.tipo === 'CANCELACION_VENTA_ILOCALIZABLE'
-        ? 'Cumplida (15 llamadas + 6 escritos + sin actividad)'
-        : 'Descartada (Hubo contacto efectivo o actividad)',
-      passed: decisionResult.tipo === 'CANCELACION_VENTA_ILOCALIZABLE',
-      notes: 'Requiere agotar 15 llamadas (2/día en horas distintas), 6 escritos y sin actividad académica.'
-    },
-    {
-      level: 7,
-      title: 'Prioridad 7: Regla Residual por Fecha (Art. 5.3)',
-      evaluation: 'Evaluada como norma residual',
-      passed: true,
-      notes: 'Solicitud previa al inicio = Cancelación regular. Solicitud posterior = Proceso de retención / Baja.'
-    }
-  ];
+const nodeData = [
+  { id: 'n0', label: 'NODO 0\nElegibilidad\nDatos mínimos', priority: 0, type: 'decision' },
+  { id: 'n1', label: 'NODO 1\nActividad Académica\nCalificaciones', priority: 1, type: 'blocker' },
+  { id: 'n2', label: 'NODO 2\nMystery Shopper\nCanal evaluador', priority: 2, type: 'decision' },
+  { id: 'n3', label: 'NODO 3\nOperativa / Dec 35/53\nCarga tardía, finanzas', priority: 3, type: 'decision' },
+  { id: 'n4', label: 'NODO 4\nPromesa de Venta\nPromesa no cumplida', priority: 4, type: 'decision' },
+  { id: 'n5', label: 'NODO 5\nError Inscripción\nCambio de ciclo', priority: 5, type: 'decision' },
+  { id: 'n6', label: 'NODO 6\nContacto / Ilocalizable\n15 llamadas + 6 escritos', priority: 6, type: 'decision' },
+  { id: 'n7', label: 'NODO 7\nFechas / Solicitud / Retención\nVentana 10 días', priority: 7, type: 'decision' },
+  { id: 'n8', label: 'NODO 8\nDocumentación\nExpediente completo', priority: 8, type: 'decision' },
+];
+
+const classificationOutcomes = [
+  { id: 'c1', label: 'CANCELACIÓN VENTA\nOPERATIVA', color: 'bg-sky-950/50 border-sky-800 text-sky-300' },
+  { id: 'c2', label: 'CANCELACIÓN VENTA\nILOCALIZABLE', color: 'bg-amber-950/50 border-amber-800 text-amber-300' },
+  { id: 'c3', label: 'CANCELACIÓN VENTA\nPROMESA NO CUMPLIDA', color: 'bg-rose-950/50 border-rose-800 text-rose-300' },
+  { id: 'c4', label: 'CANCELACIÓN VENTA\nSOLICITUD ESTUDIANTE', color: 'bg-emerald-950/50 border-emerald-800 text-emerald-300' },
+  { id: 'c5', label: 'BAJA DEFINITIVA', color: 'bg-zinc-950/50 border-zinc-800 text-zinc-300' },
+  { id: 'c6', label: 'REQUIERE REVISIÓN', color: 'bg-amber-950/50 border-amber-800 text-amber-300' },
+];
+
+export function DecisionTreeModal({ isOpen, onClose, result }: DecisionTreeModalProps) {
+  if (!isOpen) return null;
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+  };
+
+  const getNodeStatus = (nodeId: string) => {
+    if (!result) return 'pending';
+    const appliedRule = result.appliedRules.find(r => r.priority === parseInt(nodeId.replace('n', '')));
+    if (appliedRule) return appliedRule.status === 'DETERMINANTE' ? 'determinante' : 'cumplida';
+    const rejectedRule = result.rejectedRules.find(r => r.priority === parseInt(nodeId.replace('n', '')));
+    if (rejectedRule) return 'descartada';
+    return 'pending';
+  };
+
+  const getOutcomeStatus = (outcomeId: string) => {
+    if (!result) return 'inactive';
+    const classificationMap: Record<string, string> = {
+      c1: 'CANCELACION_VENTA_OPERATIVA',
+      c2: 'CANCELACION_VENTA_ILOCALIZABLE',
+      c3: 'CANCELACION_VENTA_PROMESA_NO_CUMPLIDA',
+      c4: 'CANCELACION_VENTA_A_SOLICITUD_ESTUDIANTE',
+      c5: 'BAJA',
+      c6: 'REQUIERE_REVISION'
+    };
+    return result.classification === classificationMap[outcomeId] ? 'selected' : 'inactive';
+  };
 
   return (
-    <div 
-      id="decision-tree-modal"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-xs p-4 sm:p-6"
-    >
-      <div className="bg-slate-900 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-sm animate-in fade-in duration-200" onKeyDown={handleKeyDown}>
+      <div className="bg-slate-900 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-5xl max-h-[90vh] flex flex-col animate-in slide-in-from-bottom-4 duration-200">
+        <div className="flex items-center justify-between p-4 border-b border-slate-800 sticky top-0 bg-slate-900/95 backdrop-blur-sm rounded-t-2xl">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-indigo-950 text-indigo-400 border border-indigo-800 flex items-center justify-center">
-              <GitFork className="w-4 h-4" />
-            </div>
+            <Target className="h-8 w-8 text-sky-400" />
             <div>
-              <h3 className="text-base font-bold text-slate-100">
-                Árbol de Decisiones y Jerarquía de Reglas
-              </h3>
-              <p className="text-xs text-slate-400">
-                Basado en el Procedimiento de Deserción de Estudiantes UTEL (GDM_GAM_PRD_MLG_003)
-              </p>
+              <h3 className="text-lg font-bold text-white">Árbol de Decisión Normativo</h3>
+              <p className="text-xs text-zinc-500">Flujo de evaluación jerárquica por prioridades</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-xl transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Proposition Card */}
-          <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between">
-            <div>
-              <div className="text-xs uppercase font-bold text-sky-400 tracking-wider">
-                Dictamen Técnico Determinado
-              </div>
-              <div className="text-lg font-black text-slate-100 mt-0.5">
-                {decisionResult.classificationName}
-              </div>
-              <div className="text-xs text-slate-400 mt-1">
-                Causa raíz: <span className="font-semibold text-slate-200">{decisionResult.causaRaiz}</span>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-2xl font-black text-sky-400 font-mono">
-                {decisionResult.confidence}%
-              </div>
-              <div className="text-[11px] text-slate-400 font-medium">Índice de Confianza</div>
+        <div className="flex-1 overflow-auto p-6 space-y-8">
+          <div className="space-y-4">
+            {nodeData.map((node, index) => {
+              const status = getNodeStatus(node.id);
+              const isLast = index === nodeData.length - 1;
+              
+              return (
+                <div key={node.id} className="flex items-start gap-4 relative">
+                  <div className="flex flex-col items-center flex-shrink-0">
+                    <div className={`w-40 px-3 py-4 rounded-xl text-center text-sm font-medium transition-all ${
+                      status === 'determinante' ? 'bg-emerald-950/50 border-2 border-emerald-500 text-emerald-300 shadow-lg shadow-emerald-500/20' :
+                      status === 'cumplida' ? 'bg-sky-950/50 border border-sky-800 text-sky-300' :
+                      status === 'descartada' ? 'bg-amber-950/50 border border-amber-800 text-amber-300' :
+                      'bg-zinc-900/50 border border-zinc-800 text-zinc-500'
+                    }`}>
+                      {node.label}
+                    </div>
+                    {!isLast && (
+                      <div className={`w-px h-12 mt-1 ${status === 'determinante' ? 'bg-emerald-500' : status === 'cumplida' ? 'bg-sky-500' : status === 'descartada' ? 'bg-amber-500' : 'bg-zinc-800'}`} />
+                    )}
+                  </div>
+                  <div className="flex-1 pt-2 space-y-1 text-xs text-zinc-500">
+                    <p className="font-medium text-zinc-400">Prioridad: {node.priority}</p>
+                    <p>Tipo: {node.type === 'blocker' ? 'Bloqueo Duro (Hard Blocker)' : 'Decisión Normativa'}</p>
+                    {status === 'determinante' && <p className="text-emerald-400">✓ DETERMINANTE - Corta evaluación</p>}
+                    {status === 'cumplida' && <p className="text-sky-400">✓ CUMPLIDA - Suma a clasificación</p>}
+                    {status === 'descartada' && <p className="text-amber-400">✗ DESCARTADA - Condiciones no cumplidas</p>}
+                    {status === 'pending' && <p className="text-zinc-500">⏳ Pendiente de evaluación</p>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="pt-4 border-t border-slate-800">
+            <h4 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              <Scale className="h-5 w-5 text-emerald-400" />
+              Resultados Posibles (Clasificaciones Finales)
+            </h4>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {classificationOutcomes.map(outcome => {
+                const status = getOutcomeStatus(outcome.id);
+                return (
+                  <div
+                    key={outcome.id}
+                    className={`p-4 rounded-xl text-center transition-all ${outcome.color} ${status === 'selected' ? 'ring-2 ring-emerald-500 scale-105 shadow-lg shadow-emerald-500/20' : ''}`}
+                  >
+                    <p className="font-bold text-sm">{outcome.label}</p>
+                    {status === 'selected' && (
+                      <div className="mt-2 flex items-center justify-center gap-1 text-emerald-300">
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span className="text-xs">SELECCIONADA</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* Conflict Analysis Section (Requested by user) */}
-          {conflicts.length > 0 && (
-            <div className="p-4 bg-amber-950/40 border border-amber-800/80 rounded-xl">
-              <div className="flex items-center gap-2 text-amber-300 font-bold text-xs uppercase tracking-wider mb-2">
-                <AlertTriangle className="w-4 h-4 text-amber-400" />
-                <span>Resolución Explícita de Conflicto de Reglas</span>
+          {result && result.conflicts && result.conflicts.length > 0 && (
+            <div className="pt-4 border-t border-slate-800">
+              <h4 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-rose-400" />
+                Conflictos Detectados y Resueltos
+              </h4>
+              <div className="space-y-3">
+                {result.conflicts.map((conflict, index) => (
+                  <div key={index} className="rounded-xl border border-rose-800/50 bg-rose-950/20 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="px-2 py-1 rounded bg-rose-950 text-rose-300 text-xs font-bold">CONFLICTO {index + 1}</span>
+                      <span className="px-2 py-1 rounded bg-zinc-800 text-zinc-400 text-xs">Resuelto por precedencia normativa</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                      <div className="rounded-lg bg-zinc-900/50 p-3">
+                        <p className="text-xs font-bold text-rose-300 mb-1">Regla A (Perdedora)</p>
+                        <p className="font-medium text-white">{conflict.ruleA.name}</p>
+                        <p className="text-sm text-zinc-400">{conflict.ruleA.classification}</p>
+                        <p className="text-xs text-zinc-500 mt-1">Prioridad: {conflict.ruleA.priority}</p>
+                      </div>
+                      <div className="flex items-center justify-center">
+                        <ChevronRight className="h-6 w-6 text-rose-400" />
+                      </div>
+                      <div className="rounded-lg bg-zinc-900/50 p-3">
+                        <p className="text-xs font-bold text-emerald-300 mb-1">Regla B (Ganadora)</p>
+                        <p className="font-medium text-white">{conflict.ruleB.name}</p>
+                        <p className="text-sm text-zinc-400">{conflict.ruleB.classification}</p>
+                        <p className="text-xs text-zinc-500 mt-1">Prioridad: {conflict.ruleB.priority}</p>
+                      </div>
+                    </div>
+                    <div className="rounded-lg bg-rose-950/30 p-3 border border-rose-800/50">
+                      <p className="text-xs font-bold text-rose-300 mb-1">Resolución</p>
+                      <p className="text-sm text-rose-200">{conflict.resolution}</p>
+                      <p className="text-xs text-rose-400 mt-1">Clasificación final: {conflict.selectedClassification}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                <div className="bg-slate-900 p-3.5 rounded-xl border border-amber-900/60">
-                  <div className="text-[11px] font-bold text-slate-400 uppercase">Regla A (Residual)</div>
-                  <div className="text-xs font-bold text-slate-200 mt-0.5">
-                    {conflicts[0].ruleA.name}
-                  </div>
-                  <div className="text-xs text-slate-400 mt-1">
-                    {conflicts[0].ruleA.fundamento}
-                  </div>
-                </div>
-
-                <div className="bg-emerald-950/40 p-3.5 rounded-xl border border-emerald-800/80">
-                  <div className="text-[11px] font-bold text-emerald-300 uppercase">Regla B (Prevalente)</div>
-                  <div className="text-xs font-bold text-emerald-200 mt-0.5">
-                    {conflicts[0].ruleB.name}
-                  </div>
-                  <div className="text-xs text-emerald-300 mt-1">
-                    {conflicts[0].ruleB.fundamento}
-                  </div>
-                </div>
-              </div>
-              <p className="mt-3 text-xs text-amber-200 bg-amber-950/70 p-2.5 rounded-lg border border-amber-800/60 leading-relaxed">
-                <strong>Resolución del Motor: </strong>
-                {conflicts[0].resolution}
-              </p>
             </div>
           )}
 
-          {/* Step-by-Step Priority Evaluation */}
-          <div>
-            <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">
-              Evaluación Secuencial por Nivel de Prioridad
-            </h4>
-            <div className="space-y-3">
-              {priorities.map((p) => (
-                <div 
-                  key={p.level}
-                  className={`p-3.5 rounded-xl border transition-colors ${
-                    p.level === decisionResult.prioridadRegla
-                      ? 'bg-sky-950/50 border-sky-600 ring-1 ring-sky-500/40'
-                      : 'bg-slate-950 border-slate-800'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                        p.level === decisionResult.prioridadRegla
-                          ? 'bg-sky-600 text-white'
-                          : 'bg-slate-800 text-slate-400'
-                      }`}>
-                        {p.level}
-                      </span>
-                      <span className="text-xs font-bold text-slate-200">{p.title}</span>
-                    </div>
-
-                    <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
-                      p.level === decisionResult.prioridadRegla
-                        ? 'bg-sky-600 text-white'
-                        : 'bg-slate-800 text-slate-400'
-                    }`}>
-                      {p.evaluation}
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-slate-400 mt-1.5 pl-8">
-                    {p.notes}
-                  </p>
-                </div>
-              ))}
+          {result && result.missingEvidence.length > 0 && (
+            <div className="pt-4 border-t border-slate-800">
+              <h4 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <Search className="h-5 w-5 text-sky-400" />
+                Evidencias Faltantes
+              </h4>
+              <div className="rounded-xl border border-sky-800/50 bg-sky-950/20 p-4">
+                <ul className="space-y-2">
+                  {result.missingEvidence.map((ev, i) => (
+                    <li key={i} className="flex items-center gap-2 text-sky-300">
+                      <span className="h-2 w-2 rounded-full bg-sky-400 flex-shrink-0" />
+                      {ev}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
-          </div>
-
-          {/* Detailed Reasoning Transcript */}
-          <div>
-            <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
-              Bitácora de Razonamiento del Motor
-            </h4>
-            <div className="bg-slate-950 text-slate-200 p-4 rounded-xl font-mono text-xs space-y-1.5 leading-relaxed border border-slate-800">
-              {decisionResult.reasoning.map((r, i) => (
-                <div key={i} className="text-emerald-400">
-                  <span className="text-slate-500 mr-2">[{i + 1}]</span>
-                  {r}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-3 border-t border-slate-800 bg-slate-950 flex items-center justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-xl text-xs font-semibold transition-colors"
-          >
-            Entendido, cerrar análisis
-          </button>
+          )}
         </div>
       </div>
     </div>
   );
-};
+}

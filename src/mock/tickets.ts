@@ -1,5 +1,7 @@
 import { addManualEvidence, analyzeTicketEvidence, createInitialTicket, Ticket } from '../lib/tickets';
 
+export type { Ticket };
+
 function buildIlocalizableTicket(): Ticket {
   const base = createInitialTicket({
     folio: 'CaVe-28259',

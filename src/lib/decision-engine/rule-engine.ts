@@ -26,16 +26,62 @@ import { resolveDecisionConflict } from './conflict-resolver';
 import { buildReasoningAndConfidence } from './reasoning-builder';
 import { requiredEvidenceForRule } from './evidence-evaluator';
 
-export class RuleEngine {
-  private rules: DecisionRule[] = [];
+export interface RuleRegistry {
+  getRules(): DecisionRule[];
+  register(rule: DecisionRule): void;
+  unregister(ruleId: string): void;
+}
 
-  constructor() {
-    this.registerDefaultRules();
+function createDefaultRegistry(): RuleRegistry {
+  const rules: DecisionRule[] = [
+    new EligibilityRule(),
+    new AcademicActivityRule(),
+    new MysteryShopperRule(),
+    new OperationalCancellationRule(),
+    new Decision35Rule(),
+    new Decision53Rule(),
+    new SalesPromiseRule(),
+    new EnrollmentErrorRule(),
+    new CycleChangeRule(),
+    new UnreachableRule(),
+    new EffectiveContactRule(),
+    new DatesRule(),
+    new StudentRequestRule(),
+    new RetentionRule(),
+    new DocumentationRule()
+  ];
+
+  return {
+    getRules: () => [...rules].sort((a, b) => a.priority - b.priority),
+    register: (rule: DecisionRule) => {
+      rules.push(rule);
+    },
+    unregister: (ruleId: string) => {
+      const idx = rules.findIndex(r => r.id === ruleId);
+      if (idx >= 0) rules.splice(idx, 1);
+    }
+  };
+}
+
+const defaultRegistry = createDefaultRegistry();
+
+export function getDefaultRuleRegistry(): RuleRegistry {
+  return defaultRegistry;
+}
+
+export function createRuleEngine(registry?: RuleRegistry): RuleEngine {
+  return new RuleEngine(registry ?? defaultRegistry);
+}
+
+export class RuleEngine {
+  private rules: DecisionRule[];
+
+  constructor(registry?: RuleRegistry) {
+    this.rules = (registry ?? defaultRegistry).getRules();
   }
 
   public registerRule(rule: DecisionRule): void {
     this.rules.push(rule);
-    // Mantener ordenado por prioridad numérica ascendente
     this.rules.sort((a, b) => a.priority - b.priority);
   }
 
