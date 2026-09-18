@@ -100,6 +100,68 @@ export const ExtractionResultSchema = z.object({
 
 export type ValidatedExtractionResult = z.infer<typeof ExtractionResultSchema>;
 
+const STUDENT_FIELDS = ['folio', 'matricula', 'nombre', 'nivel', 'programa', 'canal', 'telefono'];
+const REQUEST_FIELDS = ['fecha_inicio', 'fecha_solicitud', 'motivo'];
+const INDICATOR_FIELDS = [
+  'contacto_efectivo', 'llamadas', 'mensajes', 'ingreso_aula', 'materias_cargadas',
+  'falla_carga_materias', 'calificaciones', 'errores_operativos', 'errores_financieros',
+  'error_inscripcion', 'promesa_venta', 'retencion_realizada', 'retencion_aceptada',
+  'intencion_cancelacion_manifiesta',
+];
+const AULA_FIELDS = [
+  'ingreso_aula', 'ultimo_acceso_curso', 'hora_acceso', 'curso', 'grupo', 'calificacion',
+  'actividades_entregadas', 'clics_detectados', 'materias_cargadas', 'seleccion_modalidad',
+];
+const SIU_FIELDS = [
+  'estatus_alumno', 'ultima_sesion', 'fecha_inicio', 'primer_pago', 'proximo_pago_monto',
+  'telefono', 'correo', 'calificaciones_registradas',
+];
+const CONTACTO_FIELDS = ['telefono_registrado', 'correo_registrado', 'medio', 'ultima_interaccion'];
+
+function asField(value: unknown) {
+  if (value && typeof value === 'object' && 'valor' in value) return value;
+  return {
+    valor: value ?? null,
+    confianza: value === null || value === undefined || value === '' ? 'BAJA' : 'MEDIA',
+    evidencia_id: null,
+    pagina: null,
+    timestamp: null,
+    texto_citado: value === null || value === undefined ? null : String(value),
+  };
+}
+
+function normalizeFields(container: Record<string, unknown>, fields: string[]) {
+  for (const field of fields) container[field] = asField(container[field]);
+}
+
+function normalizeExtractionShape(parsed: unknown): unknown {
+  if (!parsed || typeof parsed !== 'object') return parsed;
+  const data = parsed as Record<string, any>;
+
+  data.tipo_evidencia = asField(data.tipo_evidencia ?? 'DESCONOCIDA');
+
+  data.estudiante = data.estudiante && typeof data.estudiante === 'object' ? data.estudiante : {};
+  normalizeFields(data.estudiante, STUDENT_FIELDS);
+
+  data.solicitud = data.solicitud && typeof data.solicitud === 'object' ? data.solicitud : {};
+  normalizeFields(data.solicitud, REQUEST_FIELDS);
+
+  data.indicadores = data.indicadores && typeof data.indicadores === 'object' ? data.indicadores : {};
+  normalizeFields(data.indicadores, INDICATOR_FIELDS);
+
+  data.hechos = Array.isArray(data.hechos) ? data.hechos : [];
+
+  data.visual_facts = data.visual_facts && typeof data.visual_facts === 'object' ? data.visual_facts : {};
+  data.visual_facts.aula_virtual = data.visual_facts.aula_virtual && typeof data.visual_facts.aula_virtual === 'object' ? data.visual_facts.aula_virtual : {};
+  normalizeFields(data.visual_facts.aula_virtual, AULA_FIELDS);
+  data.visual_facts.siu = data.visual_facts.siu && typeof data.visual_facts.siu === 'object' ? data.visual_facts.siu : {};
+  normalizeFields(data.visual_facts.siu, SIU_FIELDS);
+  data.visual_facts.contacto = data.visual_facts.contacto && typeof data.visual_facts.contacto === 'object' ? data.visual_facts.contacto : {};
+  normalizeFields(data.visual_facts.contacto, CONTACTO_FIELDS);
+
+  return data;
+}
+
 export function parseExtractionJson(raw: string): { success: true; data: ValidatedExtractionResult } | { success: false; error: string } {
   let parsed: unknown;
   try {
@@ -115,7 +177,7 @@ export function parseExtractionJson(raw: string): { success: true; data: Validat
     }
   }
 
-  const result = ExtractionResultSchema.safeParse(parsed);
+  const result = ExtractionResultSchema.safeParse(normalizeExtractionShape(parsed));
   if (!result.success) return { success: false, error: result.error.message };
   return { success: true, data: result.data };
 }
