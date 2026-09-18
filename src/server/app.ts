@@ -379,4 +379,32 @@ function draftToDecisionData(draft: any): CaseDecisionData {
   };
 }
 
+app.use((error: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (res.headersSent) {
+    next(error);
+    return;
+  }
+
+  if (error instanceof multer.MulterError) {
+    const status = error.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+    res.status(status).json({
+      success: false,
+      error: error.code,
+      message: error.code === 'LIMIT_FILE_SIZE'
+        ? 'El archivo supera el límite permitido de 50 MB.'
+        : error.code === 'LIMIT_FILE_COUNT'
+          ? 'Se permite un máximo de 10 archivos por carga.'
+          : error.message,
+    });
+    return;
+  }
+
+  console.error('Unhandled API error:', error);
+  res.status(500).json({
+    success: false,
+    error: 'INTERNAL_ERROR',
+    message: error instanceof Error ? error.message : 'Error inesperado del servidor',
+  });
+});
+
 export default app;
