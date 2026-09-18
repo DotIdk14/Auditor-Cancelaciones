@@ -298,6 +298,7 @@ const handleRemoveEvidence = useCallback((id: string) => {
   }, [backend, selectedTicketId]);
 
 const handleUpdateCaseDetails = useCallback((updates: Partial<AuditCase>) => {
+    if (!selectedTicketId) return;
     backend.updateCase(selectedTicketId, updates).catch(error => {
       console.error('Error actualizando expediente:', error);
     });
@@ -321,16 +322,18 @@ const handleUpdateCaseDetails = useCallback((updates: Partial<AuditCase>) => {
   }, [selectedTicketId, tickets]);
 
   const handleApproveDictamen = useCallback((text?: string) => {
+    if (!selectedTicket) return;
     backend.approveDictamen(selectedTicket.id, text).catch(error => {
       console.error('Error aprobando dictamen:', error);
     });
   }, [backend, selectedTicket]);
 
 const handleSaveDictamenDraft = useCallback((text: string) => {
+    if (!selectedTicket) return;
     backend.saveDictamen(selectedTicket.id, { text, status: 'PENDIENTE_REVISION' }).catch(error => {
       console.error('Error guardando dictamen:', error);
     });
-  }, [backend, selectedTicket.id]);
+  }, [backend, selectedTicket]);
 
   const stats = useMemo(() => ({
     total: tickets.length,
@@ -339,7 +342,7 @@ const handleSaveDictamenDraft = useCallback((text: string) => {
   }), [tickets]);
 
   const preflight = useMemo(
-    () => runPDFPreflight(selectedTicket, decisionResult),
+    () => selectedTicket ? runPDFPreflight(selectedTicket, decisionResult) : undefined,
     [selectedTicket, decisionResult]
   );
 
