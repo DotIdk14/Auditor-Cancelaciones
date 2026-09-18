@@ -2,18 +2,18 @@ import {
   CancellationCase,
   CaseDecisionData,
   DecisionResult
-} from './types';
-import { RuleEngine, getDefaultRuleRegistry, createRuleEngine, type RuleRegistry } from './rule-engine';
-import { getDaysFromStart, isWithinDesertionPeriod, isWithinCancellationWindow, isPriorToStart } from './rules/dates';
-import { evaluateAcademicActivity } from './rules/academic-activity';
-import { evaluateEffectiveContact } from './rules/effective-contact';
-import { evaluateMinimumContactAttempts } from './rules/unreachable';
-import { evaluateStudentIntent } from './rules/student-request';
-import { evaluateDecision35 } from './rules/decision35';
-import { evaluateDecision53 } from './rules/decision53';
-import { resolveDecisionConflict } from './conflict-resolver';
-import { requiredEvidenceForRule } from './evidence-evaluator';
-import { normalizeToCancellationCase } from './adapters/case-adapter';
+} from './types.js';
+import { RuleEngine, getDefaultRuleRegistry, createRuleEngine, type RuleRegistry } from './rule-engine.js';
+import { getDaysFromStart, isWithinDesertionPeriod, isWithinCancellationWindow, isPriorToStart } from './rules/dates.js';
+import { evaluateAcademicActivity } from './rules/academic-activity.js';
+import { evaluateEffectiveContact } from './rules/effective-contact.js';
+import { evaluateMinimumContactAttempts } from './rules/unreachable.js';
+import { evaluateStudentIntent } from './rules/student-request.js';
+import { evaluateDecision35 } from './rules/decision35.js';
+import { evaluateDecision53 } from './rules/decision53.js';
+import { resolveDecisionConflict } from './conflict-resolver.js';
+import { requiredEvidenceForRule } from './evidence-evaluator.js';
+import { normalizeToCancellationCase } from './adapters/case-adapter.js';
 
 /**
  * POLICY-LOCKED CODE

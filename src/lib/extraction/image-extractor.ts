@@ -1,9 +1,9 @@
-import { getOpenRouterClient } from '../ai/client';
-import { getAiModels } from '../ai/models';
-import { buildExtractionPrompt } from '../ai/prompts';
-import { parseExtractionJson } from '../ai/schemas';
-import { UsageCollector } from '../ai/usage';
-import { StructuredExtractionOutput } from './structured-extractor';
+import { getOpenRouterClient } from '../ai/client.js';
+import { getAiModels } from '../ai/models.js';
+import { buildExtractionPrompt } from '../ai/prompts.js';
+import { parseExtractionJson } from '../ai/schemas.js';
+import { UsageCollector } from '../ai/usage.js';
+import { StructuredExtractionOutput } from './structured-extractor.js';
 
 function extractJsonContent(content: string): string {
   const trimmed = content.trim();

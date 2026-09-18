@@ -1,7 +1,7 @@
-import { CancellationCase, DecisionRule, RuleEvaluationResult } from '../types';
-import { evaluateEffectiveContact } from './effective-contact';
-import { evaluateAcademicActivity } from './academic-activity';
-import { isWithinCancellationWindow } from './dates';
+import { CancellationCase, DecisionRule, RuleEvaluationResult } from '../types.js';
+import { evaluateEffectiveContact } from './effective-contact.js';
+import { evaluateAcademicActivity } from './academic-activity.js';
+import { isWithinCancellationWindow } from './dates.js';
 
 export interface MinimumContactAttemptsEvaluation {
   callsCount: number;

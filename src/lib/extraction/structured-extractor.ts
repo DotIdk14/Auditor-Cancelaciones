@@ -1,9 +1,9 @@
-import { getOpenRouterClient } from '../ai/client';
-import { getAiModels } from '../ai/models';
-import { buildExtractionPrompt } from '../ai/prompts';
-import { parseExtractionJson, ValidatedExtractionResult } from '../ai/schemas';
-import { UsageCollector } from '../ai/usage';
-import { ExtractedFact } from './types';
+import { getOpenRouterClient } from '../ai/client.js';
+import { getAiModels } from '../ai/models.js';
+import { buildExtractionPrompt } from '../ai/prompts.js';
+import { parseExtractionJson, ValidatedExtractionResult } from '../ai/schemas.js';
+import { UsageCollector } from '../ai/usage.js';
+import { ExtractedFact } from './types.js';
 
 export type EvidenceKind = 'PDF' | 'IMAGE' | 'AUDIO' | 'TEXT';
 

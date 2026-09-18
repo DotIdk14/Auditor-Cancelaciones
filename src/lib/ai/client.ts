@@ -1,5 +1,5 @@
 import { OpenAI } from 'openai';
-import { requireOpenRouterConfig } from './models';
+import { requireOpenRouterConfig } from './models.js';
 
 let openRouterClient: OpenAI | null = null;
 

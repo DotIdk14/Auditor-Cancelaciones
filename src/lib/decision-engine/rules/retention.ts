@@ -1,5 +1,5 @@
-import { CancellationCase, DecisionRule, RuleEvaluationResult } from '../types';
-import { isPriorToStart } from './dates';
+import { CancellationCase, DecisionRule, RuleEvaluationResult } from '../types.js';
+import { isPriorToStart } from './dates.js';
 
 export class RetentionRule implements DecisionRule {
   id = 'RULE_NODO16_RETENTION';

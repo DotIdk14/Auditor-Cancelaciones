@@ -6,25 +6,25 @@ import {
   DecisionRule,
   RejectedRule,
   RuleEvaluationResult
-} from './types';
-import { EligibilityRule } from './rules/eligibility';
-import { DatesRule } from './rules/dates';
-import { AcademicActivityRule } from './rules/academic-activity';
-import { StudentRequestRule } from './rules/student-request';
-import { EffectiveContactRule } from './rules/effective-contact';
-import { UnreachableRule } from './rules/unreachable';
-import { CycleChangeRule } from './rules/cycle-change';
-import { EnrollmentErrorRule } from './rules/enrollment-error';
-import { SalesPromiseRule } from './rules/sales-promise';
-import { OperationalCancellationRule } from './rules/operational-cancellation';
-import { Decision35Rule } from './rules/decision35';
-import { Decision53Rule } from './rules/decision53';
-import { DocumentationRule } from './rules/documentation';
-import { MysteryShopperRule } from './rules/mystery-shopper';
-import { RetentionRule } from './rules/retention';
-import { resolveDecisionConflict } from './conflict-resolver';
-import { buildReasoningAndConfidence } from './reasoning-builder';
-import { requiredEvidenceForRule } from './evidence-evaluator';
+} from './types.js';
+import { EligibilityRule } from './rules/eligibility.js';
+import { DatesRule } from './rules/dates.js';
+import { AcademicActivityRule } from './rules/academic-activity.js';
+import { StudentRequestRule } from './rules/student-request.js';
+import { EffectiveContactRule } from './rules/effective-contact.js';
+import { UnreachableRule } from './rules/unreachable.js';
+import { CycleChangeRule } from './rules/cycle-change.js';
+import { EnrollmentErrorRule } from './rules/enrollment-error.js';
+import { SalesPromiseRule } from './rules/sales-promise.js';
+import { OperationalCancellationRule } from './rules/operational-cancellation.js';
+import { Decision35Rule } from './rules/decision35.js';
+import { Decision53Rule } from './rules/decision53.js';
+import { DocumentationRule } from './rules/documentation.js';
+import { MysteryShopperRule } from './rules/mystery-shopper.js';
+import { RetentionRule } from './rules/retention.js';
+import { resolveDecisionConflict } from './conflict-resolver.js';
+import { buildReasoningAndConfidence } from './reasoning-builder.js';
+import { requiredEvidenceForRule } from './evidence-evaluator.js';
 
 export interface RuleRegistry {
   getRules(): DecisionRule[];

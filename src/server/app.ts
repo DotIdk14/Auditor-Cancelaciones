@@ -1,8 +1,8 @@
 import express from 'express';
 import multer from 'multer';
-import { analyzeCancellationCase, CaseDecisionData } from '../lib/decision-engine/decision-engine';
-import { DecisionResult } from '../lib/decision-engine/types';
-import { processEvidences } from '../lib/extraction/extraction-service';
+import { analyzeCancellationCase, CaseDecisionData } from '../lib/decision-engine/decision-engine.js';
+import { DecisionResult } from '../lib/decision-engine/types.js';
+import { processEvidences } from '../lib/extraction/extraction-service.js';
 
 export const app = express();
 app.use(express.json({ limit: '10mb' }));

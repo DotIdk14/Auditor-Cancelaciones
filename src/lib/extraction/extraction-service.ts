@@ -9,14 +9,14 @@ import {
   ExtractedFact,
   ConflictItem,
   FieldConfidence,
-} from './types';
-import { UsageCollector } from '../ai/usage';
-import { getExtractionConcurrency } from '../ai/models';
-import { ValidatedExtractionResult } from '../ai/schemas';
-import { extractPdfTextLocally, renderPdfPagesToImages } from './pdf-extractor';
-import { extractFromImage } from './image-extractor';
-import { extractStructuredFromText, normalizeFacts } from './structured-extractor';
-import { formatTranscriptSegments, transcribeAudio, TranscriptSegment } from './audio-extractor';
+} from './types.js';
+import { UsageCollector } from '../ai/usage.js';
+import { getExtractionConcurrency } from '../ai/models.js';
+import { ValidatedExtractionResult } from '../ai/schemas.js';
+import { extractPdfTextLocally, renderPdfPagesToImages } from './pdf-extractor.js';
+import { extractFromImage } from './image-extractor.js';
+import { extractStructuredFromText, normalizeFacts } from './structured-extractor.js';
+import { formatTranscriptSegments, transcribeAudio, TranscriptSegment } from './audio-extractor.js';
 
 const ALLOWED_MIME_TYPES = [
   'application/pdf',

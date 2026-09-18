@@ -1,5 +1,5 @@
-import { CancellationCase, DecisionRule, RuleEvaluationResult } from '../types';
-import { getDaysFromStart } from './dates';
+import { CancellationCase, DecisionRule, RuleEvaluationResult } from '../types.js';
+import { getDaysFromStart } from './dates.js';
 
 export class EnrollmentErrorRule implements DecisionRule {
   id = 'RULE_NODO9_ENROLLMENT_ERROR';
