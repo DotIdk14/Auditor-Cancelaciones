@@ -1,5 +1,3 @@
-import { PDFParse } from 'pdf-parse';
-
 export interface PdfTextExtractionResult {
   text: string;
   pages: number;
@@ -55,7 +53,13 @@ export function evaluatePdfTextQuality(text: string, pages: number): Omit<PdfTex
   return { pagesWithoutText, printableRatio: ratio, wordCount, hasUsefulText, reason };
 }
 
+async function loadPdfParse() {
+  const mod = await import('pdf-parse');
+  return mod.PDFParse;
+}
+
 export async function extractPdfTextLocally(buffer: Buffer): Promise<PdfTextExtractionResult> {
+  const PDFParse = await loadPdfParse();
   const parser = new PDFParse({ data: buffer });
   try {
     const data = await parser.getText({ pageJoiner: '\n' });
@@ -68,6 +72,7 @@ export async function extractPdfTextLocally(buffer: Buffer): Promise<PdfTextExtr
 }
 
 export async function renderPdfPagesToImages(buffer: Buffer, maxPages = 3): Promise<RenderedPdfPage[]> {
+  const PDFParse = await loadPdfParse();
   const parser = new PDFParse({ data: buffer });
   try {
     const screenshots = await parser.getScreenshot({ first: maxPages, desiredWidth: 1400, imageBuffer: true, imageDataUrl: false });
