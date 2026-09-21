@@ -1,0 +1,14 @@
+{
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 60,
+      "includeFiles": "node_modules/{@napi-rs/**,pdfjs-dist/legacy/build/pdf.worker.mjs}"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    }
+  ]
+}

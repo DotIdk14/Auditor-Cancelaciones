@@ -1,0 +1,16 @@
+node_modules
+.git
+.env*
+!.env.example
+.vercel
+dist
+build
+coverage
+*.log
+temp-*.json
+opencode.json
+.insforge
+.agent
+.agents
+.claude
+.github/copilot*

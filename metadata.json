@@ -1,0 +1,6 @@
+{
+  "name": "Auditor de Cancelaciones",
+  "description": "Sistema interno de auditoría de calidad para la revisión, análisis con árbol de decisiones y dictaminación de casos de deserción y cancelación de estudiantes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
