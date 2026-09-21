@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect, type DragEvent } from 'react'
 import { Mic, Upload, X } from 'lucide-react';
 import { TranscriptSegment, CallRecord } from '../../types/domain';
 import { parseApiResponse } from '../../lib/api/parse-response';
-import { HEAVY_API_BASE } from '../../lib/api/config';
+import { getHeavyApiBase } from '../../lib/api/config';
 
 interface CallTranscriptProps {
   calls: CallRecord[];
@@ -61,7 +61,7 @@ export function CallTranscript({
       const formData = new FormData();
       formData.append('audio', file);
 
-      const response = await fetch(`${HEAVY_API_BASE}/api/cases/transcribe`, {
+      const response = await fetch(`${getHeavyApiBase()}/api/cases/transcribe`, {
         method: 'POST',
         body: formData,
       });

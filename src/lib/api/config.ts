@@ -10,9 +10,10 @@ function resolveEnv(key: string): string {
   return '';
 }
 
-// Endpoints pesados (auditoría multimodal, extracción y transcripción) viven en
-// el contenedor siempre-activo de InsForge Compute, sin el tope de 60s de Vercel.
-// Sobrescribible con VITE_HEAVY_API_BASE si cambia la URL del servicio.
-export const HEAVY_API_BASE =
-  resolveEnv('VITE_HEAVY_API_BASE') ||
-  'https://auditor-api-9e29e329-252e-481c-a632-95b71ee3df51.fly.dev';
+export function getHeavyApiBase(): string {
+  const baseUrl = resolveEnv('VITE_HEAVY_API_BASE').trim();
+  if (!baseUrl) {
+    throw new Error('VITE_HEAVY_API_BASE is required to use the heavy audit API.');
+  }
+  return baseUrl.replace(/\/$/, '');
+}

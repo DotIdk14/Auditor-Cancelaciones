@@ -13,12 +13,22 @@ import type { MultimodalAuditInput } from '../lib/audit/types.js';
 import { persistRouter } from './persist.js';
 import { progressStore } from './progress.js';
 import { auditJobsRouter } from './jobs-router.js';
+import { createActorResolver } from './auth/resolver.js';
+import { createPolicyRouter } from './policy/router.js';
+import { InsforgePolicyRepository } from './policy/repository.js';
+import { createRuleRouter } from './rules/router.js';
+import { InsforgeRuleRepository } from './rules/repository.js';
 
 export const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 app.use('/api/persist', persistRouter);
+
+// The default resolver is intentionally unconfigured until a verified auth
+// provider is selected. Policy routes therefore fail closed with 401.
+app.use('/api/policies', createPolicyRouter(new InsforgePolicyRepository(), createActorResolver()));
+app.use('/api/rules', createRuleRouter(new InsforgeRuleRepository(), createActorResolver()));
 
 // Arquitectura asíncrona: POST /api/audit/jobs, GET /api/audit/jobs/:jobId[/result]
 app.use('/api', auditJobsRouter);

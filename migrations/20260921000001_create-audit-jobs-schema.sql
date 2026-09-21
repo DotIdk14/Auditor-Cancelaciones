@@ -52,7 +52,7 @@ CREATE INDEX audit_job_evidences_status_idx ON public.audit_job_evidences (statu
 -- 3. Función atómica de reclamación de job (usando FOR UPDATE SKIP LOCKED)
 -- ============================================================================
 CREATE OR REPLACE FUNCTION public.claim_next_audit_job(worker_id TEXT)
-RETURNS audit_jobs%ROWTYPE AS $$
+RETURNS public.audit_jobs AS $$
 DECLARE
   claimed_job audit_jobs%ROWTYPE;
 BEGIN

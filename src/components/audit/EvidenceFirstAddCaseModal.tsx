@@ -20,7 +20,7 @@ import { CaseDecisionData } from '../../lib/decision-engine/decision-engine';
 import { buildDictamenText } from '../../lib/dictamen/templates';
 import type { AuditResult, AuditEvidenceItem } from '../../lib/audit/types';
 import { parseApiResponse } from '../../lib/api/parse-response';
-import { HEAVY_API_BASE } from '../../lib/api/config';
+import { getHeavyApiBase } from '../../lib/api/config';
 
 interface EvidenceFirstAddCaseModalProps {
   isOpen: boolean;
@@ -150,7 +150,7 @@ export const EvidenceFirstAddCaseModal: React.FC<EvidenceFirstAddCaseModalProps>
             : `Iniciando servidor de procesamiento... (intento ${attempt + 1})`
         );
         try {
-          const healthRes = await fetch(`${HEAVY_API_BASE}/api/health`, { cache: 'no-store' });
+          const healthRes = await fetch(`${getHeavyApiBase()}/api/health`, { cache: 'no-store' });
           if (healthRes.ok) {
             awake = true;
             break;
@@ -171,7 +171,7 @@ export const EvidenceFirstAddCaseModal: React.FC<EvidenceFirstAddCaseModalProps>
       stopProgressPolling();
       progressPollRef.current = setInterval(async () => {
         try {
-          const progressRes = await fetch(`${HEAVY_API_BASE}/api/audit/multimodal/progress/${progressId}`);
+          const progressRes = await fetch(`${getHeavyApiBase()}/api/audit/multimodal/progress/${progressId}`);
           const progressBody = await parseApiResponse(progressRes);
           if (progressBody.success) {
             setProgress(Number(progressBody.data.progress) || 0);
@@ -182,7 +182,7 @@ export const EvidenceFirstAddCaseModal: React.FC<EvidenceFirstAddCaseModalProps>
         }
       }, 900);
 
-      let response = await fetch(`${HEAVY_API_BASE}/api/audit/multimodal`, {
+      let response = await fetch(`${getHeavyApiBase()}/api/audit/multimodal`, {
         method: 'POST',
         body: formData,
       });
@@ -192,7 +192,7 @@ export const EvidenceFirstAddCaseModal: React.FC<EvidenceFirstAddCaseModalProps>
         stopProgressPolling();
         setProgressDetail('Servidor reiniciando, reintentando la subida...');
         await new Promise(r => setTimeout(r, 3000));
-        response = await fetch(`${HEAVY_API_BASE}/api/audit/multimodal`, {
+        response = await fetch(`${getHeavyApiBase()}/api/audit/multimodal`, {
           method: 'POST',
           body: formData,
         });
